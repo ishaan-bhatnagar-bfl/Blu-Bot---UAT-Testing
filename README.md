@@ -1,2 +1,30 @@
-# CAI
-CAI (Consumer AI Platform) is designed not as a finance app or a chatbot, but as a life-oriented AI companion that builds a long-term relationship with the user. It helps people think, decide, and act across their financial lives by understanding their context, emotions, and history—recognising that money decisions are deeply tied to factors like anxiety, aspiration, family, izzat, and fear, not just numbers. Instead of navigating features, users simply describe life situations, and CAI responds conversationally with guidance, continuity, and action. Built on trust and memory, it learns over time and behaves like a reliable human advisor rather than an institution. Rather than solving isolated tasks, it fills a critical relationship gap by holding the user’s broader life context, operating as a living, adaptive interface that listens, responds, and evolves with the user’s journey.
+# BLU Chatbot UAT Automation
+
+Real user testing framework for Bajaj Finserv BLU conversational AI.
+
+## Overview
+
+- **73,454 real user queries** from 2-day chat dump
+- **126 synthetic queries** for coverage gaps
+- **Quality-based scoring** (response appropriateness, not keyword matching)
+- **Multi-turn conversation support** (follow-ups, relation selection)
+- **Retry handling** (30-second cooldown, error recovery)
+
+## Quick Start
+
+### Install
+npm install
+
+### Setup Config
+cp run_config.json.bak run_config.json
+
+### Run Tests
+FILTER_L1=Loan FILTER_VARIATION="Real User" BATCH_SIZE=20 npx playwright test tests/blu_v3.test.js
+
+## Results
+
+Pass Rate: 10/10 (100%) on Loan category
+
+## Contact
+
+Owner: Ishaan Bhatnagar

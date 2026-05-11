@@ -3,20 +3,30 @@ Consumer AI Platform
 
 Overview
 CAI stands for Consumer AI Platform.
+
 It is not designed as a finance app or a chatbot.
+
 CAI is a life-oriented AI companion that builds a long-term relationship with the user.
+
 Its purpose is to help people think, decide, and act across their financial lives by understanding their context, emotions, and history — not just completing isolated tasks.
 
 Core Principles
 
 1. Built for the Whole Person
+
 CAI is designed for the person, not the “financial customer.”
+
 It recognises that financial decisions are deeply tied to:
-Anxiety
-Aspiration
-Family context
-Izzat (social standing)
-Fear
+
+- Anxiety
+
+- Aspiration
+
+- Family context
+
+- Izzat (social standing)
+
+- Fear
 —not just products or numbers.
 
 2. Conversation is the Product

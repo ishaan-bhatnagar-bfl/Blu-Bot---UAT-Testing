@@ -1,17 +1,17 @@
 'use strict';
 /**
- * BLU UAT v3.3 - Retry Cooldown Handling
+ * BLU UAT v3.5 - Message Count Fix
  * 
- * v3.3: Polls retry button for 30s cooldown
- * v3.2: Captures answer after retry dismissal
- * v3.1: Quality-based scoring for real users
+ * v3.5: Get count before relation click, skip retry if bot already answered
+ * v3.4: Only poll retry during relation selection
+ * v3.3: Polls retry for 30s cooldown
  */
 
 const { test, expect } = require('@playwright/test');
 const fs   = require('fs');
 const path = require('path');
 
-const VERSION = 'v3.3';
+const VERSION = 'v3.5';
 
 const cfg = JSON.parse(fs.readFileSync(path.resolve('run_config.json'), 'utf-8'));
 const allCases = JSON.parse(fs.readFileSync(path.resolve('data/blu_test_cases_v3.json'), 'utf-8'));
@@ -113,30 +113,48 @@ async function submitFromComposer(page, locator) {
   return method;
 }
 
-async function dismissRetry(page) {
+async function dismissRetryIfNeeded(page, maxWaitSeconds = 40) {
+  // Only dismiss if retry appears during THIS operation
   const btn = page.getByRole('button', { name: /^Retry$/i }).first();
-  let attempts = 0;
   
-  while (await btn.isVisible().catch(() => false) && attempts < 20) {
-    // Check if clickable (not in 30s cooldown)
+  const isVisible = await btn.isVisible().catch(() => false);
+  if (!isVisible) return false;
+  
+  console.log(`  🟠 Retry detected`);
+  
+  const maxAttempts = Math.ceil(maxWaitSeconds / 2);
+  
+  for (let i = 0; i < maxAttempts; i++) {
     const isEnabled = await btn.isEnabled().catch(() => false);
     
     if (isEnabled) {
-      console.log(`  🟠 Retry clickable, dismissing...`);
+      console.log(`    ✓ Retry clickable, dismissing`);
       await btn.click({ force: true });
       await page.waitForTimeout(2000);
-      attempts++;
+      return true;
     } else {
-      // In cooldown, wait 2s and check again
-      console.log(`  ⏳ Retry in cooldown, waiting...`);
+      console.log(`    ⏳ Cooldown (${i * 2}s/${maxWaitSeconds}s)`);
       await page.waitForTimeout(2000);
-      attempts++;
     }
-    
-    if (attempts >= 20) {
-      console.log(`  ⚠️  Retry never became clickable after 40s`);
-      break;
+  }
+  
+  console.log(`    ⚠️  Retry never clickable after ${maxWaitSeconds}s`);
+  return false;
+}
+
+async function dismissRetry(page) {
+  // Quick dismiss for non-critical retries (backward compat)
+  const btn = page.getByRole('button', { name: /^Retry$/i }).first();
+  let attempts = 0;
+  while (await btn.isVisible().catch(() => false) && attempts < 3) {
+    const isEnabled = await btn.isEnabled().catch(() => false);
+    if (isEnabled) {
+      await btn.click({ force: true });
+      await page.waitForTimeout(2000);
+    } else {
+      break; // Don't wait if disabled
     }
+    attempts++;
   }
 }
 
@@ -584,13 +602,22 @@ test('BLU UAT', async ({ page, context }) => {
                            botReply.toLowerCase().includes('select the product');
       if (needsRelation) {
         console.log('  🔧 Relation requested');
-        await selectRelationByL1(page, tc.l1);
         
-        await page.waitForTimeout(15000);
-        await dismissRetry(page); // Waits up to 40s for retry
-        
-        await page.waitForTimeout(10000); // Extended to 10s
+        // Get count BEFORE clicking
         beforeCount = await botMessageCount(page);
+        
+        await selectRelationByL1(page, tc.l1);
+        await page.waitForTimeout(15000);
+        
+        // Check if bot already responded (new message exists)
+        const currentCount = await botMessageCount(page);
+        if (currentCount > beforeCount) {
+          console.log('  ✅ Bot responded during wait');
+        } else {
+          // No new message, check for retry
+          await dismissRetryIfNeeded(page, 40);
+          await page.waitForTimeout(10000);
+        }
         
         try {
           botReply = await waitForFinalBotReply(page, beforeCount, BOT_TIMEOUT);

@@ -1,0 +1,6 @@
+data/
+results/
+node_modules/
+*.csv
+run_config.json
+.DS_Store

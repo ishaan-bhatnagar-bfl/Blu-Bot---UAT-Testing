@@ -1,0 +1,11 @@
+{
+  "BLU_URL": "https://bflaiassist-uat.bajajfinserv.in/blu/?jid=blu",
+  "BLU_MOBILE": "YOUR_UAT_MOBILE_NUMBER",
+  "BLU_OTP": "YOUR_OTP_BYPASS_CODE",
+  "BATCH_SIZE": 20,
+  "FILTER_L1": "",
+  "FILTER_MODULE": "",
+  "FILTER_L2": "",
+  "DELAY_BETWEEN_MSGS_MS": 2000,
+  "BOT_REPLY_TIMEOUT_MS": 45000
+}

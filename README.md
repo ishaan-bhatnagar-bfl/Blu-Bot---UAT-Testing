@@ -174,7 +174,7 @@ Use these exact strings for `FILTER_MODULE`:
 | `Rewards_Service` | Punit Bharmecha | Rewards |
 | `Loan_Payments_Service` | Irfan Shaikh | Loan Payment Services |
 | `Help_Support` | Ishaan Bhatnagar | Help on Raising a Request, Document Centre, KYC, CIBIL, KFS, Mandate |
-| `Generic_Loan_Service` | Ishaan Bhatnagar | Generic Loan Queries |
+| `Generic_Loan_Service` | Ishaan Bhatnagar/ Ayushi Sharma | Generic Loan Queries |
 | `Generic_Cards_Service` | Ishaan Bhatnagar | Generic Cards Queries |
 | `Generic_Deposits_Service` | Ishaan Bhatnagar | Generic Deposit Queries |
 

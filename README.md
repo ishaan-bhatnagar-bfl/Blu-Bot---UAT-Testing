@@ -2,7 +2,7 @@
 
 Automated testing framework for Bajaj Finserv's BLU conversational AI (UAT).
 
-Tests real customer utterances from the chat dump against the live bot, scores responses against JSON knowledge base ground truth, and produces a CSV + JSON report.
+Tests real customer utterances against the live bot, scores responses against the JSON knowledge base, and produces a CSV + JSON report per run.
 
 ---
 
@@ -25,8 +25,8 @@ Tests real customer utterances from the chat dump against the live bot, scores r
 
 - **Node.js** v18 or higher — [download here](https://nodejs.org/)
 - **Git** — [download here](https://git-scm.com/)
-- Access to the BLU UAT environment (mobile number + OTP bypass code from your team lead)
-- The chat dump CSV (`3IN1 CHAT DATA DUMP.csv`) — obtain from Ishaan Bhatnagar
+- Access to the BLU UAT environment (mobile number + OTP bypass code — get from Ishaan Bhatnagar)
+- Data files (see [Data Setup](#data-setup)) — obtain from Ishaan Bhatnagar
 
 Check your Node version:
 ```bash
@@ -41,8 +41,8 @@ node --version
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_ORG/blu-automationV2.git
-cd blu-automationV2
+git clone https://github.com/ishaan-bhatnagar-bfl/CAI.git
+cd CAI
 ```
 
 ### 2. Install dependencies
@@ -72,46 +72,52 @@ Open `run_config.json` and fill in your credentials:
 }
 ```
 
-> **Important:** `run_config.json` is gitignored and will never be committed. Never share your OTP bypass code over email or Slack.
+> `run_config.json` is gitignored — never committed. Never share your OTP bypass code over email or Slack.
 
 ---
 
 ## Data Setup
 
-The chat dump CSV must be placed at:
+Place the following files in the `data/` folder. None are committed to the repo (gitignored).
 
-```
-data/3IN1 CHAT DATA DUMP.csv
-```
-
-This file is **not** in the repository (it contains customer data). Obtain it from Ishaan Bhatnagar.
-
-The `data/` folder is gitignored — nothing in it will be committed.
+| File | Required for | Source |
+|---|---|---|
+| `3IN1 CHAT DATA DUMP.csv` | v4/v5/v6 generator (old bot utterances) | Ishaan Bhatnagar |
+| `Chat Dump_9_10_May.xlsx` | v5/v6 generator (new bot sessions) | Ishaan Bhatnagar |
+| `Loan Knowledge Repository version-1.1.xlsx` | v5/v6 generator (KB merge) | Ishaan Bhatnagar |
+| `Insurance Knowledge Repository version 1.1 1.xlsx` | v5 generator only | Ishaan Bhatnagar |
 
 ---
 
 ## Generating Test Cases
 
-Test cases are generated once from the JSON knowledge base + chat dump. Regenerate whenever the JSONs are updated.
+Run once before testing, or whenever JSONs or data files are updated.
+
+### v6 (recommended — most accurate)
+
+```bash
+node scripts/generate_test_cases_v6.js
+```
+
+Uses utterance-to-KB-question matching (primary) + bot reply validation (secondary). Skips fallback-only sessions. Output: `data/blu_test_cases_v6.json`
+
+### v5 (session-level mapping)
+
+```bash
+node scripts/generate_test_cases_v5.js
+```
+
+Uses bot reply → KB answer matching. Output: `data/blu_test_cases_v5.json`
+
+### v4 (keyword mapping, old CSV only)
 
 ```bash
 node scripts/generate_test_cases_v4.js
 ```
 
-This will:
-- Read all JSON files from `JSON(s)/May 07 - Latest Content/`
-- Map ~73K real user queries from the chat dump to JSON ground truth
-- Select top 50 real user queries per L2 category
-- Gap-fill with JSON verbatim questions for any L3 with no real user coverage
-- Output `data/blu_test_cases_v4.json`
+Output: `data/blu_test_cases_v4.json`
 
-**Expected output:**
-```
-Total test cases: ~3,500
-Module breakdown: [list of modules and counts]
-```
-
-> The data folder and chat dump CSV must both be present before running this.
+> Note: The test file `tests/blu_v4.test.js` reads from whichever JSON is specified. Update the `allCases` path in the test file to switch between v4/v5/v6.
 
 ---
 
@@ -129,19 +135,13 @@ FILTER_MODULE="EMI_Card_Service" BATCH_SIZE=20 npx playwright test tests/blu_v4.
 FILTER_MODULE="EMI_Card_Service" FILTER_L2="EMI Network Card" BATCH_SIZE=20 npx playwright test tests/blu_v4.test.js
 ```
 
-### Run without module filter (all test cases)
+### Run without module filter
 
 ```bash
 BATCH_SIZE=20 npx playwright test tests/blu_v4.test.js
 ```
 
-### Increase batch size (max ~15 before timeout)
-
-```bash
-FILTER_MODULE="Flexi_Loan_PL_Service" BATCH_SIZE=15 npx playwright test tests/blu_v4.test.js
-```
-
-> Results are saved to `results/` after every test case — even if the run crashes midway, partial results are preserved.
+> Results are saved after every test case — partial results are preserved even if the run crashes.
 
 ---
 
@@ -163,21 +163,20 @@ Use these exact strings for `FILTER_MODULE`:
 | `LAS_Service` | Ayushi Sharma | Loan Against Securities |
 | `LAFD_Service` | Ishaan Bhatnagar | Loan Against Fixed Deposit |
 | `EMI_Card_Service` | Ishaan Bhatnagar | EMI Network Card, Health EMI Network Card |
-| `Credit_Card_Service` | — | Co-branded Credit Cards (discontinued) |
+| `Credit_Card_Service` | Ishaan Bhatnagar | Co-branded Credit Cards (discontinued) |
 | `FD_SDP_Service` | Ishaan Bhatnagar | Fixed Deposit, SDP |
 | `Insurance_Service` | Ayushi Sharma | Insurance Services |
 | `Payments_UPI_Service` | Punit Bharmecha | UPI |
 | `Payments_BBPS_Service` | Punit Bharmecha | BBPS |
 | `Payments_Wallets_Service` | Punit Bharmecha | Wallets |
-| `Fastag_Service` | — | Fastag |
+| `Fastag_Service` | Punit Bharmecha | Fastag |
 | `Profile_Service` | Mekhala Dighe | Profile, DNC |
-| `Rewards_Service` | — | Rewards |
-| `Loan_Payments_Service` | — | Loan Payment Services |
+| `Rewards_Service` | Punit Bharmecha | Rewards |
+| `Loan_Payments_Service` | Irfan Shaikh | Loan Payment Services |
 | `Help_Support` | Ishaan Bhatnagar | Help on Raising a Request, Document Centre, KYC, CIBIL, KFS, Mandate |
-| `Generic_Loan_Service` | — | Generic Loan Queries |
-| `Generic_Cards_Service` | — | Generic Cards Queries |
-| `Generic_Deposits_Service` | — | Generic Deposit Queries |
-| `Other` | — | Unmapped / misc |
+| `Generic_Loan_Service` | Ishaan Bhatnagar | Generic Loan Queries |
+| `Generic_Cards_Service` | Ishaan Bhatnagar | Generic Cards Queries |
+| `Generic_Deposits_Service` | Ishaan Bhatnagar | Generic Deposit Queries |
 
 ---
 
@@ -187,89 +186,93 @@ After each run, two files are created in `results/`:
 
 ```
 results/
-  run_2026-05-11T10-30-00.json   ← full structured data
-  run_2026-05-11T10-30-00.csv    ← open in Excel / Google Sheets
+  run_2026-05-12T10-30-00.json   ← full structured data
+  run_2026-05-12T10-30-00.csv    ← open in Excel / Google Sheets
 ```
 
 ### CSV Columns
 
 | Column | Description |
 |---|---|
-| TC ID | Unique test case identifier |
-| Module | Module tag (e.g. EMI_Card_Service) |
+| TC ID | Unique test case ID |
+| Module | Module tag |
 | L1 / L2 / L3 | Category hierarchy |
-| Utterance | The query sent to the bot |
+| Utterance | Query sent to bot |
 | Bot Reply | Full bot response (up to 1000 chars) |
-| Expected Key Phrases | Phrases the bot should mention |
-| Matched Phrases | Which phrases were actually found |
-| CTA Expected | Whether a CTA button was expected |
-| CTA Found | Whether a CTA was detected in the reply |
-| Overall | **Pass / Fail / Manual Review** |
-| Reason | Why it failed (if applicable) |
-| Follow-up Rounds | How many follow-up turns were needed |
-| Time (ms) | Response time in milliseconds |
-| Mapping Type | `real_user` / `real_user_low_confidence` / `json_verbatim` |
-| Mapping Confidence | 0–100 — how well the query matched the JSON |
-| Scoring Type | `auto` (automated scoring) / `manual` (needs human review) |
+| Expected Key Phrases | Phrases bot should mention |
+| Matched Phrases | Phrases actually found |
+| CTA Expected | Whether a CTA was expected |
+| CTA Found | Whether a CTA was detected |
+| Overall | Pass / Fail / Manual Review |
+| Reason | Why it failed |
+| Follow-up Rounds | Multi-turn follow-up count |
+| Time (ms) | Response time |
+| Mapping Type | `new_dump` / `old_csv` / `kb_verbatim` |
+| Mapping Confidence | 0–100 match score |
+| Scoring Type | `auto` or `manual` |
 
 ### Overall Values
 
-- **Pass** — bot replied with expected content and CTA (if applicable)
-- **Fail** — bot gave wrong answer, error, or no CTA when expected
-- **Manual Review** — answer depends on customer data; automated scoring not possible; human must review the Bot Reply column
+- **Pass** — bot replied with expected content and CTA
+- **Fail** — wrong answer, error, or missing CTA
+- **Manual Review** — dynamic/relational answer; human must verify Bot Reply column
 
 ---
 
 ## How Scoring Works
 
-### Auto scoring (Static answers)
-Used when the JSON answer does not depend on customer data.
+### Auto scoring (static answers)
+1. Extract key phrases from KB answer (CTA label, core instructions)
+2. Check bot reply contains at least 1 key phrase
+3. Check CTA present if expected
+4. Both pass → **Pass**
 
-1. Extract key phrases from JSON answer (CTA label, core instructions)
-2. Check if bot reply contains at least 1 key phrase
-3. If CTA is expected: check bot reply contains a CTA indicator (click, tap, apply, visit, etc.)
-4. Both must pass → **Pass**
-
-### Manual Review (Dynamic/Relational answers)
-Used when the JSON answer references `customer_data` (e.g. EMI amounts, loan status, account details).
-
-- Bot reply is logged in full
-- Overall is set to `Manual Review`
-- Human must open the CSV and verify the Bot Reply makes sense for the UAT account's actual data
+### Manual Review (dynamic/relational answers)
+KB answer references `customer_data` (EMI amounts, loan status, account details). Bot reply is logged; human reviews.
 
 ### Mapping types
-- `real_user` — confidence ≥ 30%; reliable ground truth
-- `real_user_low_confidence` — confidence < 30%; treat results with caution; worth manual spot-check
-- `json_verbatim` — JSON question used directly; highest reliability for scoring
+- `new_dump` — from new bot sessions, confidence ≥ 30 — most reliable
+- `new_dump_low_confidence` — from new bot sessions, confidence < 30 — treat with caution
+- `old_csv` — from old bot CSV, confidence ≥ 30
+- `old_csv_low_confidence` — old CSV, confidence < 30
+- `kb_verbatim` — KB question used directly — highest reliability for scoring
 
 ---
 
 ## Troubleshooting
 
 **"0 test cases matched filters"**
-- Check spelling of `FILTER_MODULE` — must match exactly (case-sensitive)
-- Run `node -e "const c=require('./data/blu_test_cases_v4.json'); console.log([...new Set(c.map(t=>t.module))].sort().join('\n'))"` to see all available modules
 
-**"data/blu_test_cases_v4.json not found"**
-- Run `node scripts/generate_test_cases_v4.js` first
-- Make sure the chat dump CSV is at `data/3IN1 CHAT DATA DUMP.csv`
+Check spelling of `FILTER_MODULE`:
+```bash
+node -e "const c=require('./data/blu_test_cases_v6.json'); console.log([...new Set(c.map(t=>t.module))].sort().join('\n'))"
+```
 
-**Bot keeps showing "Retry" button**
-- This is a UAT environment instability issue; the script waits up to 40s for retry to clear
-- If it persists, restart the run
+**"data/blu_test_cases_v6.json not found"**
 
-**OTP validation fails**
-- Confirm your OTP bypass code is correct in `run_config.json`
-- Check with Ishaan if the UAT bypass is active
+Run the generator first: `node scripts/generate_test_cases_v6.js`
 
-**Test times out after ~10 cases**
-- Playwright timeout is set to 600s (~15 cases max per run)
-- Use `BATCH_SIZE=10` for slower bot environments
-- Results up to the timeout are already saved in `results/`
+**Consent screen not clearing**
 
-**Consent screen keeps appearing mid-run**
-- This is expected on first login; the script handles it automatically
-- If it appears repeatedly, the UAT session may have expired — restart the run
+Script handles consent automatically during login. If it loops, restart the run.
+
+**Bot says "no active relation"**
+
+UAT account relations may have been reset. Contact Ishaan Bhatnagar to restore UAT relations.
+
+**OTP validation fails / Retry card appears during login**
+
+Script retries up to 5 times. If it still fails, UAT server may be down — try again in a few minutes.
+
+**Push to GitHub fails with 403**
+
+Corporate and home networks block git push. Use mobile hotspot. If still failing:
+```bash
+git commit --allow-empty -m "unblock push"
+git push
+git reset HEAD~1
+git push --force
+```
 
 ---
 
@@ -278,48 +281,48 @@ Used when the JSON answer references `customer_data` (e.g. EMI amounts, loan sta
 ### Repository structure
 
 ```
-blu-automationV2/
+CAI/
 ├── JSON(s)/
-│   └── May 07 - Latest Content/   ← Knowledge base JSONs (do not edit)
+│   └── May 07 - Latest Content/   ← KB JSONs (do not edit)
 ├── scripts/
-│   ├── generate_test_cases_v4.js  ← Main generator (edit this)
-│   └── [legacy scripts]
+│   ├── generate_test_cases_v6.js  ← v6 generator (recommended)
+│   ├── generate_test_cases_v5.js  ← v5 generator
+│   ├── generate_test_cases_v4.js  ← v4 generator
+│   ├── compare_kb.js              ← analysis: JSON vs repo overlap
+│   ├── check_mapped.js            ← analysis: manual mapping coverage
+│   ├── check_sr.js                ← analysis: SR dump structure
+│   └── check_sr2.js               ← analysis: SR dump L1/L2 coverage
 ├── tests/
-│   └── blu_v4.test.js             ← Main test file (edit this)
-├── data/                          ← Gitignored; CSV + generated JSON go here
-├── results/                       ← Gitignored; run outputs go here
-├── playwright.config.js
-├── run_config.json.example        ← Template; copy to run_config.json
+│   └── blu_v4.test.js             ← main test file (v4.7)
+├── data/                          ← gitignored; place data files here
+├── results/                       ← gitignored; run outputs here
+├── playwright.config.js           ← 600s timeout
+├── run_config.json.example        ← template; copy to run_config.json
 ├── package.json
 └── README.md
 ```
 
 ### When JSONs are updated
 
-1. Drop new JSON files into `JSON(s)/May 07 - Latest Content/`
-2. Rerun the generator: `node scripts/generate_test_cases_v4.js`
-3. Run your module tests to verify
-
-### Updating the module map
-
-If a new L2 category is added to the JSONs, add it to the `MODULE_MAP` object in `scripts/generate_test_cases_v4.js`:
-
-```javascript
-'l1::new l2 name (lowercase)': 'Module_Tag_Name',
+```bash
+node scripts/generate_test_cases_v6.js
+FILTER_MODULE="YOUR_MODULE" BATCH_SIZE=5 npx playwright test tests/blu_v4.test.js
 ```
 
-Then regenerate test cases.
+### Switching test case version
+
+In `tests/blu_v4.test.js`, line ~19:
+```javascript
+const allCases = JSON.parse(fs.readFileSync(path.resolve('data/blu_test_cases_v6.json'), 'utf-8'));
+```
+Change `v6` to `v5` or `v4` as needed.
 
 ### Commit checklist
 
 ```bash
-# Only commit these — never commit data/ or results/ or run_config.json
-git add scripts/
-git add tests/
-git add playwright.config.js
-git add run_config.json.example
-git add README.md
+git add scripts/ tests/ playwright.config.js run_config.json.example README.md
 git commit -m "your message"
+# Use mobile hotspot for push if on corporate/home network
 git push
 ```
 
@@ -331,18 +334,14 @@ git push
 # Setup (once)
 npm install && npx playwright install chromium
 cp run_config.json.example run_config.json
-# Edit run_config.json with your credentials
 
-# Generate test cases (once, or after JSON updates)
-node scripts/generate_test_cases_v4.js
+# Generate test cases
+node scripts/generate_test_cases_v6.js
 
 # Run your module
 FILTER_MODULE="EMI_Card_Service" BATCH_SIZE=20 npx playwright test tests/blu_v4.test.js
 
-# Run a specific L2
-FILTER_MODULE="EMI_Card_Service" FILTER_L2="EMI Network Card" BATCH_SIZE=20 npx playwright test tests/blu_v4.test.js
-
-# Results in:
+# Results:
 # results/run_<timestamp>.csv   ← open in Excel
 # results/run_<timestamp>.json  ← structured data
 ```

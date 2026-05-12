@@ -63,7 +63,7 @@ Open `run_config.json` and fill in your credentials:
 ```json
 {
   "BLU_URL": "https://bflaiassist-uat.bajajfinserv.in/blu/?jid=blu",
-  "BLU_MOBILE": "9876543210",
+  "BLU_MOBILE": "xxxxxxxxxx",
   "BLU_OTP": "123456",
   "BATCH_SIZE": 20,
   "FILTER_MODULE": "",

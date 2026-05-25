@@ -5,3 +5,19 @@ node_modules/
 run_config.json
 .DS_Store
 test-results/
+
+# Test outputs - too large for Git
+test-output/*.csv
+test-output/screenshots/
+
+# Node
+node_modules/
+package-lock.json
+
+# OS
+.DS_Store
+
+# Dashboard (separate folder)
+../dashboard/node_modules/
+../dashboard/session_state.json
+test-output/*.json

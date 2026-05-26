@@ -185,6 +185,28 @@ async function runLLMVerdict({ question, expectedBehaviour, botResponse, module 
   const SOURCING = /apply|apply karna|loan lena|naya loan|insta emi|application form/i
   if (SOURCING.test(question)) return { verdict: 'SOURCING_SKIP', reason: 'Sourcing intent', confidence: 100 }
 
+  // Detect disambiguation responses — bot is asking user to select a product/relation
+  // These are valid mid-flow states, not failures. Mark REVIEW, don't call LLM.
+  const DISAMBIGUATION = [
+    /please select the relation to move further/i,
+    /select (a |the )?(product|relation|loan|card|account)/i,
+    /which (loan|product|account|card|relation)/i,
+    /you have multiple (product|relation|loan)/i,
+    /please (choose|select|pick) (your |a )?(product|loan|card|relation|account)/i,
+    /select (your )?(loan|emi card|fd|deposit|card) to (proceed|continue|move)/i,
+    /please let (me|us) know which/i,
+  ]
+  const isDisambiguation = DISAMBIGUATION.some(p => p.test(botResponse))
+  if (isDisambiguation) {
+    return {
+      verdict:    'REVIEW',
+      reason:     'Disambiguation step — bot awaiting product selection, re-run after selecting',
+      confidence: 100,
+      model:      'rule-based',
+      elapsed:    '0.0',
+    }
+  }
+
   // Check Ollama availability
   const available = await isOllamaAvailable()
   if (!available) {

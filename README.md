@@ -2,6 +2,8 @@
 
 Automated + manual testing framework for **BLU Bot** (Bajaj Finance AI assistant) across N2P and UAT environments.
 
+Built by the CAI Team. Maintainer: **Ishaan Bhatnagar** (Flexi Loans PL/SME, Flexi Wheels, LAFD, EMI Card, FD/SDP, Help & Support).
+
 ---
 
 ## Architecture
@@ -10,14 +12,14 @@ Automated + manual testing framework for **BLU Bot** (Bajaj Finance AI assistant
 BLU-Automation/
 ├── dashboard/
 │   ├── blu_test_dashboard_v4.html   ← Main test UI (open in browser)
-│   ├── playwright_server.js         ← WebSocket bridge (Node.js)
-│   └── verdict_engine.js            ← Formal Pass/Fail verdict rules
+│   ├── playwright_server.js         ← WebSocket bridge v3.0 (Node.js)
+│   ├── verdict_engine.js            ← Structured keyword verdict rules
+│   └── llm_verdict.js               ← LLM verdict via Ollama Llama 3.1 8B
 │
 ├── scripts/
 │   ├── aggregate_results.py         ← Post-run HTML + CSV report generator
 │   ├── kb_update_trigger.py         ← Auto-pipeline on KB update
-│   ├── generate_test_cases_v6.js    ← Test case generator (utterance→KB matching)
-│   ├── generate_test_cases_v7.js    ← Test case generator v7
+│   ├── generate_test_cases_v7.js    ← Test case generator v7.1
 │   ├── extract_questions.sh
 │   ├── paraphrase_generator.sh
 │   ├── edge_case_generator.sh
@@ -26,73 +28,86 @@ BLU-Automation/
 ├── knowledge_base/
 │   ├── JSONs/
 │   │   ├── May 07 - Latest Content/   ← Previous KB (reference)
-│   │   └── May 22 - Latest Content/   ← Active KB (current)
+│   │   └── May 22 - Latest Content/   ← Active KB (84 JSON files)
 │   └── Excels/
-│       ├── Rahul More/
-│       ├── Vaibhav Deshmukh/
-│       └── Vikas Rathour/
 │
 ├── automation/
 │   ├── test-output/
-│   │   ├── blu_test_cases_v7.csv          ← Primary test cases (1,552)
-│   │   ├── blu_test_cases_v3_paraphrased.csv  ← Master (129K cases)
+│   │   ├── blu_test_cases_v7.csv          ← Primary (2,321 cases, all modules)
+│   │   ├── blu_test_cases_v3_paraphrased.csv  ← Master (129K real user cases)
 │   │   ├── blu_regression_suite.csv       ← 50 critical regression cases
 │   │   ├── blu_edge_cases.csv             ← 4,479 stress/edge cases
 │   │   ├── blu_multiturn_test_cases.csv   ← 66 multi-turn flows
 │   │   └── reports/                       ← Aggregated run reports
-│   ├── tests/
-│   │   └── blu_v4.test.js                 ← Legacy Playwright CLI runner
 │   └── playwright.config.js
 │
 └── data/                             ← Gitignored — obtain from Ishaan
-    ├── 3IN1 CHAT DATA DUMP.csv
-    ├── Chat Dump_9_10_May.xlsx
-    └── Loan Knowledge Repository version-1.1.xlsx
 ```
+
+---
+
+## Prerequisites
+
+- **Node.js** v18+
+- **Python 3.10+**
+- **Ollama** (local LLM for verdict scoring) — `brew install ollama`
+- **Llama 3.1 8B model** — see LLM Setup below
+- Access to N2P/UAT test mobile + OTP — get from Ishaan Bhatnagar
 
 ---
 
 ## Quick Start
 
-### Prerequisites
-- **Node.js** v18+ — [nodejs.org](https://nodejs.org)
-- **Python 3.10+** — for report generation and KB trigger scripts
-- Access to N2P/UAT test mobile number + OTP — get from Ishaan Bhatnagar
-
 ### 1. Clone
 ```bash
-git clone https://github.com/ishaan-bhatnagar-bfl/Blu-Bot---UAT-Testing.git
-cd Blu-Bot---UAT-Testing
+git clone https://github.com/ishaan-bhatnagar-bfl/BLU-Bot-Testing.git
+cd BLU-Bot-Testing
 ```
 
-### 2. Install dependencies
+### 2. Install Node dependencies
 ```bash
-cd dashboard
-npm install playwright ws
+cd dashboard && npm install playwright ws
 ```
 
-### 3. Start the WebSocket bridge
+### 3. LLM Setup (one-time)
 ```bash
-cd dashboard
-node playwright_server.js
+# Download Llama 3.1 8B (4.6GB — takes 10-15 mins)
+curl -L --retry 10 --retry-delay 15 -C - \
+  "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf" \
+  -o ~/Desktop/llama3.1-8b-q4.gguf
+
+# Register with Ollama
+echo 'FROM /Users/<your-username>/Desktop/llama3.1-8b-q4.gguf' > ~/Desktop/Modelfile
+ollama create llama3.1-local -f ~/Desktop/Modelfile
 ```
-Keep this terminal open. You should see:
+
+### 4. Start services (3 terminals)
+
+**Terminal 1 — Ollama:**
+```bash
+ollama serve
+```
+
+**Terminal 2 — Bridge:**
+```bash
+cd dashboard && node playwright_server.js
+```
+Look for:
 ```
 ✅ Browser launched
+🧠 Ollama available — LLM verdict enabled (llama3.1-local)
 🚀 Bridge running on ws://localhost:3001
 ```
 
-### 4. Open the dashboard
+**Terminal 3 — Dashboard:**
 ```bash
 open dashboard/blu_test_dashboard_v4.html
 ```
 
 ### 5. Connect and test
-1. Select environment: **N2P** or **UAT**
-2. Click **Connect to Bot** → enter mobile → enter OTP
-3. Load a test file: drag-drop a CSV or click **Load CSV**
-4. Filter by module in the sidebar
-5. Click **⚡ Bulk Run** or run cases individually
+1. Select env: **N2P** or **UAT**
+2. Click **Connect to Bot** → enter mobile → OTP
+3. Load test CSV → filter by module → **⚡ Bulk Run**
 
 ---
 
@@ -109,13 +124,67 @@ open dashboard/blu_test_dashboard_v4.html
 
 | File | Cases | Use for |
 |------|-------|---------|
-| `blu_test_cases_v7.csv` | 1,552 | Daily runs — scored, KB-mapped |
-| `blu_test_cases_v3_paraphrased.csv` | 129K | Full coverage runs |
+| `blu_test_cases_v7.csv` | 2,321 | Daily runs — all modules, KB-verbatim |
+| `blu_test_cases_v3_paraphrased.csv` | 129K | Full coverage — real user utterances |
 | `blu_regression_suite.csv` | 50 | Post-deploy sanity check |
 | `blu_edge_cases.csv` | 4,479 | Stress: typos, Hinglish, truncated |
 | `blu_multiturn_test_cases.csv` | 66 flows | Multi-turn manual testing |
 
-All test files support both V3 (human-readable columns) and V7 (internal columns) formats — the dashboard normalises on load.
+Both V3 and V7 column formats load correctly — dashboard normalises on load.
+
+---
+
+## Verdict Engine
+
+Every bot response is scored by two layers:
+
+### Layer 1 — Keyword Rules (`verdict_engine.js`)
+Fast, ~0ms. 8 structured rules:
+
+| Rule | What it checks |
+|------|---------------|
+| `SOURCING_GUARD` | Query is not a Sourcing/apply intent |
+| `NO_FALLBACK` | Response is not a fallback/retry card |
+| `LANGUAGE` | Response language matches query language |
+| `MIN_LENGTH` | Response meets minimum length for module |
+| `CTA_PRESENT` | CTA detected when KB expects one |
+| `NO_CROSS_PRODUCT` | No unrelated product mentions |
+| `ESCALATION_CHECK` | Escalation matches KB expectation |
+| `KEYWORD_MATCH` | Key phrases from KB present in response |
+
+### Layer 2 — LLM Verdict (`llm_verdict.js`)
+Semantic scoring via Ollama Llama 3.1 8B, ~3s.
+
+- **Disambiguation detection** — "Please select the relation" → `REVIEW` (no LLM call)
+- **Sourcing skip** — apply/new loan intent → `SOURCING_SKIP`
+- **Hybrid logic** — LLM overrides keyword on disagreement
+- **Fallback** — if Ollama not running, keyword verdict used silently
+
+**Hybrid rules:**
+- Both PASS → PASS
+- Both FAIL → FAIL
+- LLM FAIL + keyword PASS → FAIL
+- LLM PASS + keyword FAIL → REVIEW
+- Either REVIEW → REVIEW
+
+**Terminal output per test:**
+```
+🤖 Response (1.2s): Your EMI card limit is ₹2.5L...
+🧠 LLM: ✅ PASS (91%) — Response correctly states EMI card limit
+```
+
+Final verdict shows in dashboard response panel with full rule breakdown.
+
+---
+
+## Session Behaviour
+
+- **Auto-reset after 30 messages** — bot navigates back to login
+- **Re-auth detection** — server detects login screen and re-authenticates
+  - UAT: uses `123465` automatically
+  - N2P: shows inline OTP input in dashboard banner
+- **Message queue** — incoming messages during retry countdown are queued, not dropped
+- **Retry card handling** — server waits out countdown, clicks Retry when active
 
 ---
 
@@ -130,116 +199,66 @@ All test files support both V3 (human-readable columns) and V7 (internal columns
 | FD / SDP | Ishaan Bhatnagar |
 | Help & Support (RAR & FAQ) | Ishaan Bhatnagar |
 | Term Loan (PL & SME) | Ayushi Sharma |
-| Term Wheels (NCF / UCF / Tractor / CV / TWF) | Ayushi Sharma |
-| LAS Service | Ayushi Sharma |
-| ESOP Finance Service | Ayushi Sharma |
-| Insurance (General / Health / Life / VAS / BALIC / Bajaj Prime) | Ayushi Sharma |
+| Term Wheels | Ayushi Sharma |
+| LAS / ESOP / Insurance | Ayushi Sharma |
 | Document Centre | Ayushi Sharma |
-| Home Loan / LAP / BHFL / Affordable Housing | Irfan Shaikh |
-| Upcoming EMI & Advance EMI | Irfan Shaikh |
-| Part-payment & Foreclosure | Irfan Shaikh |
-| Loan Cancellation Payment | Irfan Shaikh |
-| Change / Swap Bank Account | Irfan Shaikh |
-| Horizontals (Welcome screen, Navigation, Links) | Irfan Shaikh |
-| Gold Loan Service | Mekhala Dighe |
-| B2B Loan / Micro-Finance | Mekhala Dighe |
-| Profile – ETB / PTB / NTB | Mekhala Dighe |
-| Do Not Call (DNC) | Mekhala Dighe |
-| Consent Management | Mekhala Dighe |
-| Solar / Silver / Invoice Finance | Punit Bharmecha |
-| Payments – UPI / BBPS / FT / Bills & Recharges | Punit Bharmecha |
-| DMS – Collections CLP / Settlement / Overdue | Punit Bharmecha |
-| EW – Extended Warranty | Punit Bharmecha |
+| Home Loan / LAP / BHFL | Irfan Shaikh |
+| Upcoming EMI / Part-payment / Foreclosure | Irfan Shaikh |
+| Gold Loan / Microfinance / B2B | Mekhala Dighe |
+| Profile / DNC / Consent | Mekhala Dighe |
+| Payments (UPI / BBPS / Wallets / FASTag) | Punit Bharmecha |
+| DMS / EW | Punit Bharmecha |
+
+**Zero-coverage modules** (chatbot-flag=yes missing in KB JSONs — content team action needed):
+SME Flexi Loan, Home Loan, Loan Payments, Rewards, Help & Support
 
 ---
 
 ## Scope
 
-- **In scope:** All Service modules listed above
-- **Out of scope:** Sourcing flows (any apply / application journey — e.g. EMI Card apply, Personal Loan apply). Note: CTAs pointing to sourcing are in scope; the apply journey itself is not.
-
----
-
-## Verdict Engine
-
-Every bot response is scored by `verdict_engine.js` against 8 structured rules:
-
-| Rule | What it checks |
-|------|---------------|
-| `SOURCING_GUARD` | Query is not a Sourcing/apply intent |
-| `NO_FALLBACK` | Response is not a fallback / retry card |
-| `LANGUAGE` | Response language matches query language (Hinglish → Hinglish OK) |
-| `MIN_LENGTH` | Response meets minimum length for this module |
-| `CTA_PRESENT` | CTA detected when KB expects one |
-| `NO_CROSS_PRODUCT` | Response doesn't mention unrelated products |
-| `ESCALATION_CHECK` | Escalation behaviour matches KB expectation |
-| `KEYWORD_MATCH` | Key phrases from KB answer present in response |
-
-Verdict: **PASS** / **FAIL** / **REVIEW** / **SOURCING_SKIP**
-
-Each rule shows individually in the response panel with ✓/✗/~/⊘ + reason.
+- ✅ **In scope:** All Service modules
+- ❌ **Out of scope:** Sourcing flows (apply/application journeys). CTAs pointing to sourcing are in scope; the journey itself is not.
 
 ---
 
 ## Reporting Bugs (ADO)
 
-1. Any failed test case shows a 🐛 Bug button
-2. Click it — the modal auto-fills ADO format:
-   ```
-   CAI Team || WEB || [ENV] || [description]
-   ```
-3. Click **Export + Copy** — copies to clipboard and downloads `.txt`
-4. Paste into ADO work item
+1. Failed case shows 🐛 Bug button — auto-fills failed rule names in description
+2. Format: `CAI Team || WEB || [ENV] || [description]`
+3. Click **Export + Copy** → paste into ADO
 
-After a run, export the full results:
-- Click **Export CSV** in the dashboard header
-- Run the aggregator for an HTML report:
-  ```bash
-  python3 scripts/aggregate_results.py <exported_file.csv>
-  ```
-  Output → `automation/test-output/reports/report_YYYY-MM-DD.html`
+After a run, generate HTML report:
+```bash
+python3 scripts/aggregate_results.py <exported_results.csv>
+# Output → automation/test-output/reports/report_YYYY-MM-DD.html
+```
 
 ---
 
 ## When KB Updates
 
-Drop new JSONs into `knowledge_base/JSONs/[new folder]/` then:
-
 ```bash
+# Drop new JSONs into knowledge_base/JSONs/[new folder]/
 python3 scripts/kb_update_trigger.py --new-folder "June 01 - Latest Content"
+# Diff → automation/test-output/kb_diff_YYYY-MM-DD.csv
+
+# Regenerate V7 test cases
+node scripts/generate_test_cases_v7.js
 ```
 
-This runs: extract → generate v3 → paraphrase → generate v7 → diffs new vs previous test cases.
-
-Diff output: `automation/test-output/kb_diff_YYYY-MM-DD.csv`
-Columns: `Change_Type` (ADDED / REMOVED / CHANGED), `Question`, `Old_Answer`, `New_Answer`, `Notes`
-
 ---
 
-## Multi-Turn Testing
+## Roadmap
 
-`blu_multiturn_test_cases.csv` contains 66 flows (3–4 turns each) across all 7 primary modules. Run manually:
-
-1. Send Turn 1 via the Direct input bar
-2. Check bot response against `Expected_Bot_Action`
-3. Send Turn 2, repeat
-4. Flag deviations via 🐛 Bug modal
-
-Flows cover: drawdown blocked, part payment, foreclosure, EMI card blocked/lost, FD maturity, LAFD, complaint escalation.
-
----
-
-## Data Files (Gitignored)
-
-The following files are not committed. Contact Ishaan Bhatnagar to obtain:
-
-- `data/3IN1 CHAT DATA DUMP.csv` — 129K real user queries (Apr dump)
-- `data/Chat Dump_9_10_May.xlsx` — May session chat dump
-- `data/Loan Knowledge Repository version-1.1.xlsx` — Loan KB Excel
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1 | ✅ Done | Retry lock, re-auth, virtual scroll |
+| Phase 2 | ✅ Done | LLM verdict via Llama 3.1 8B |
+| Phase 3 | 🔜 Next | Dashboard revamp |
+| Phase 4 | 🔜 Claude Code | Multi-turn runner, bulk resume, semantic scoring |
 
 ---
 
 ## Maintainer
 
-Ishaan Bhatnagar — CAI Team, Bajaj Finance  
-`ishaan.bhatnagar@bajajfinserv.in`
+Ishaan Bhatnagar — CAI Team, Bajaj Finance

@@ -314,9 +314,10 @@ input,textarea{font-family:var(--font)}
 
   <aside class="sidebar">
     <div class="sidebar-inner">
-      <div class="master-switch" style="grid-template-columns:repeat(3,1fr)">
+      <div class="master-switch">
         <button class="master-btn active" id="master-Service" onclick="setMaster('Service')">Service</button>
-        <button class="master-btn" id="master-Sourcing" onclick="setMaster('Sourcing')">Sourcing</button>
+        <button class="master-btn" id="master-Sourcing" onclick="setMaster('Sourcing')">Source</button>
+        <button class="master-btn" id="master-Payments" onclick="setMaster('Payments')">Pay</button>
         <button class="master-btn" id="master-All" onclick="setMaster('All')">All</button>
       </div>
       <div id="moduleList"></div>
@@ -392,44 +393,19 @@ function toggleTheme(){isDark=!isDark;document.documentElement.setAttribute('dat
 function setEnv(env){currentEnv=env;document.querySelectorAll('.env-pill').forEach(b=>b.classList.remove('active'));document.getElementById('env-'+env).classList.add('active')}
 
 // ── CSV ──
-// V7/V6 column name → dashboard standard name
-const COL_ALIAS={'utterance':'Test Question','question':'Test Question','expected_answer':'Expected Behaviour','expected_behaviour':'Expected Behaviour','module':'Module','mapping_type':'In-KB or Gap','l1':'L1','l2':'L2','l3':'L3','source':'Source','scoring_type':'Scoring Type','mapping_confidence':'Confidence','is_multi_turn':'Multi Turn','cta_expected':'CTA Expected','cta_label':'CTA Label','chat_id':'Chat ID','id':'TC ID'}
-function normaliseHdr(raw){return raw.map(h=>{const t=h.trim(),lo=t.toLowerCase().replace(/[^a-z0-9]/g,'_');return COL_ALIAS[lo]||COL_ALIAS[t]||t})}
-function inferType(row){if(row['Type'])return row['Type'];const mod=(row['Module']||'').toLowerCase();if(/upi|bbps|wallet|fastag|payment/.test(mod))return 'Payments';if(/reward/.test(mod))return 'Rewards';return 'Service'}
-function inferKBGap(row){const e=row['In-KB or Gap']||'';if(e)return e;const mt=(row['mapping_type']||'').toLowerCase();if(mt.includes('kb_verbatim'))return 'In-KB';if(mt.includes('new_dump')||mt.includes('old_csv'))return 'Real_User';return 'In-KB'}
-
 function loadCSV(e){
   const file=e.target.files[0];if(!file)return
-  document.getElementById('bulkBtn').textContent='Loading…';document.getElementById('bulkBtn').disabled=true
   const r=new FileReader()
   r.onload=ev=>{
-    const text=ev.target.result
-    const lines=text.split('\n')
-    const hdr=normaliseHdr(parseCSV(lines[0]))
-    allCases=[];results={};verdicts={};responses={};screenshots={}
-    let i=1
-    function chunk(){
-      const end=Math.min(i+2000,lines.length)
-      for(;i<end;i++){
-        if(!lines[i].trim())continue
-        const vals=parseCSV(lines[i]),row={}
-        hdr.forEach((h,idx)=>{row[h]=(vals[idx]||'').trim()})
-        if(!row['Test Question'])continue
-        if(!row['Type'])row['Type']=inferType(row)
-        if(!row['In-KB or Gap'])row['In-KB or Gap']=inferKBGap(row)
-        allCases.push({id:i,...row})
-      }
-      const pct=Math.round((i/lines.length)*100)
-      document.getElementById('bulkBtn').textContent=`Loading ${pct}%…`
-      if(i<lines.length){requestIdleCallback(chunk,{timeout:100})}
-      else{
-        document.getElementById('bulkBtn').textContent='⚡ Bulk Run'
-        document.getElementById('bulkBtn').disabled=!sessionActive
-        buildSidebar();applyFilters();updateStats()
-        console.log(`Loaded ${allCases.length.toLocaleString()} cases from ${file.name}`)
-      }
+    const lines=ev.target.result.split('\n'),hdr=parseCSV(lines[0])
+    allCases=[]
+    for(let i=1;i<lines.length;i++){
+      if(!lines[i].trim())continue
+      const vals=parseCSV(lines[i]),row={}
+      hdr.forEach((h,idx)=>row[h.trim()]=(vals[idx]||'').trim())
+      if(row['Test Question'])allCases.push({id:i,...row})
     }
-    requestIdleCallback(chunk,{timeout:100})
+    buildSidebar();applyFilters();updateStats()
   }
   r.readAsText(file)
 }
@@ -445,7 +421,7 @@ function getCaseType(c){const t=c['Type']||'';if(t)return t;const m=c['Module']|
 // ── SIDEBAR ──
 function buildSidebar(){
   const el=document.getElementById('moduleList')
-  const mc=activeMaster==='All'?allCases:allCases.filter(c=>{if(activeMaster==='Sourcing')return getCaseType(c)==='Sourcing'||(c['In-KB or Gap']||'').includes('Sourcing');if(activeMaster==='Service')return getCaseType(c)==='Service'||getCaseType(c)==='Payments'||getCaseType(c)==='Rewards';return getCaseType(c)===activeMaster})
+  const mc=activeMaster==='All'?allCases:allCases.filter(c=>{if(activeMaster==='Sourcing')return getCaseType(c)==='Sourcing'||(c['In-KB or Gap']||'').includes('Sourcing');return getCaseType(c)===activeMaster})
   const counts={};mc.forEach(c=>{counts[c['Module']]=(counts[c['Module']]||0)+1})
   const modPass={},modTotal={}
   allCases.forEach(c=>{
@@ -453,10 +429,10 @@ function buildSidebar(){
     const v=verdicts[c.id];const passed=results[c.id]==='pass'||(v&&v.verdict==='PASS')
     if(passed)modPass[c['Module']]=(modPass[c['Module']]||0)+1
   })
-  const SVC=['Flexi_Loan_PL','Flexi_Loan_SME','Flexi_Loan_PL_Service','Flexi_Loan_SME_Service','Term_Loan_PL','Term_Loan_PL_Service','Term_Loan_PB_Service','Consumer_Loan','Business_Secured_Loan','Business_Secured_Loan_Service','Microfinance','Microfinance_Service','Gold_Loan','Gold_Loan_Service','Home_Loan','Home_Loan_Service','LAS','LAS_Service','Flexi_Wheels_TWF','Flexi_Wheels_NCF','Flexi_Wheels_UCF','Flexi_Wheels_NTR','Flexi_Wheels_UTR','Flexi_Wheels_Service','Flexi_Loan_Wheels_Service','LAFD','LAFD_Service','Loan_Payments','Loan_Payments_Service','EMI_Card','EMI_Card_Service','Health_EMI_Card','Health_EMI_Card_Service','Credit_Card_DBS','Credit_Card_RBL','Credit_Card_Service','FD_SDP','FD_SDP_Service','Insurance','Insurance_Service','Help_Support','Profile_Service','Rewards_Service','Generic_Loan','Generic_Loan_Service','Generic_Cards','Generic_Cards_Service','Generic_Deposits_Service']
-  const PAY=['BBPS','Payments_BBPS_Service','Bill_Payments','Wallet','Payments_Wallets_Service','UPI','Payments_UPI_Service','FASTag','Fastag_Service','Gift_Card'],RWD=['Rewards']
+  const SVC=['Flexi_Loan_PL','Flexi_Loan_SME','Term_Loan_PL','Term_Loan_SME','Consumer_Loan','Business_Secured_Loan','Microfinance','Gold_Loan','Home_Loan','LAS','Flexi_Wheels_TWF','Flexi_Wheels_NCF','Flexi_Wheels_UCF','Flexi_Wheels_NTR','Flexi_Wheels_UTR','LAFD','Loan_Payments','EMI_Card','Health_EMI_Card','Credit_Card_DBS','Credit_Card_RBL','FD_SDP','Insurance','Help_Support','Generic_Loan','Generic_Cards','Generic_Insurance']
+  const PAY=['BBPS','Bill_Payments','Wallet','UPI','FASTag','Gift_Card'],RWD=['Rewards']
   let h=`<div class="mod-row ${activeModule==='All'?'active':''}" onclick="setModule('All')"><span class="mod-name">All Modules</span><span class="mod-badge">${mc.length}</span></div>`
-  const secs=activeMaster==='All'?[['Service',SVC],['Payments',PAY],['Rewards',RWD]]:activeMaster==='Service'?[['Service',SVC],['Payments',PAY],['Rewards',RWD]]:[[activeMaster,Object.keys(counts)]]
+  const secs=activeMaster==='All'?[['Service',SVC],['Payments',PAY],['Rewards',RWD]]:[[activeMaster,Object.keys(counts)]]
   for(const[sec,mods]of secs){
     const items=mods.filter(m=>counts[m]);if(!items.length)continue
     h+=`<div class="sb-label">${sec}</div>`
@@ -478,7 +454,7 @@ function applyFilters(){
   const q=document.getElementById('searchIn').value.toLowerCase()
   filteredCases=allCases.filter(c=>{
     const ct=getCaseType(c),kg=c['In-KB or Gap']||''
-    if(activeMaster!=='All'){if(activeMaster==='Sourcing'){if(ct!=='Sourcing'&&!kg.includes('Sourcing'))return false}else if(activeMaster==='Service'){if(ct!=='Service'&&ct!=='Payments'&&ct!=='Rewards')return false}else if(ct!==activeMaster)return false}
+    if(activeMaster!=='All'){if(activeMaster==='Sourcing'){if(ct!=='Sourcing'&&!kg.includes('Sourcing'))return false}else if(ct!==activeMaster)return false}
     if(activeModule!=='All'&&c['Module']!==activeModule)return false
     if(activeType==='In-KB'&&kg!=='In-KB')return false
     if(activeType==='Gap'&&!kg.includes('Gap'))return false

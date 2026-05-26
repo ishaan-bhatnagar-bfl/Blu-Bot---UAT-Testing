@@ -9,7 +9,8 @@ const { WebSocketServer } = require('ws')
 const fs   = require('fs')
 const path = require('path')
 
-const { runVerdict } = require('./verdict_engine')
+const { runVerdict }                          = require('./verdict_engine')
+const { runLLMVerdict, isOllamaAvailable, hybridVerdict } = require('./llm_verdict')
 
 const PORT = 3001
 let MOBILE = '9953333141'
@@ -120,9 +121,25 @@ async function dismissRetryCard(maxWaitMs = 45000) {
 // Checks if bot has reset to mobile input screen (post-30-msg reset on N2P)
 async function isBotOnLoginScreen() {
   return page.evaluate(() => {
-    const text = document.body.innerText || ''
-    return /please enter your mobile number/i.test(text) &&
-           !!/input[type="tel"], input[placeholder*="mobile"], textarea/
+    // Check for active mobile input field — not body text (which contains old bubbles)
+    // The login screen shows a textarea that is empty and accepts mobile input
+    // The post-login screen shows the chat interface with messages
+    const textarea = document.querySelector('textarea')
+    if (!textarea) return false
+
+    // If we have bot messages, we're past login
+    const botMsgs = document.querySelectorAll('div.blu-bot-message')
+    if (botMsgs.length > 1) return false  // >1 message = active session
+
+    // Check if the last bot message is specifically the mobile prompt
+    const lastBotText = botMsgs[botMsgs.length - 1]?.innerText?.trim() || ''
+    const isMobilePrompt = /please enter your mobile number/i.test(lastBotText)
+
+    // Also check: textarea is empty and visible (login state)
+    const textareaEmpty   = textarea.value.trim() === ''
+    const textareaVisible = textarea.offsetParent !== null
+
+    return isMobilePrompt && textareaEmpty && textareaVisible
   }).catch(() => false)
 }
 
@@ -414,6 +431,36 @@ async function sendMessage(question, caseId = null, expectedBehaviour = '', modu
     hasCTA: result.hasCTA, ctaLabels: result.ctaLabels,
     isHinglish: result.isHinglish, module, expectedBehaviour,
   })
+
+  // ── LLM VERDICT (Ollama Mistral 7B) ─────────────
+  // Runs in parallel — never blocks test run
+  const llmResult = await Promise.race([
+    runLLMVerdict({ question, expectedBehaviour, botResponse: result.response, module }),
+    new Promise(resolve => setTimeout(() => resolve(null), 9000))  // 9s hard timeout
+  ])
+
+  if (llmResult) {
+    const hybrid = hybridVerdict(verdict, llmResult)
+    const icon   = hybrid === 'PASS' ? '✅' : hybrid === 'FAIL' ? '❌' : '⚠️'
+    console.log(`🧠 LLM: ${icon} ${llmResult.verdict} (${llmResult.confidence}%) — ${llmResult.reason}`)
+    if (hybrid !== verdict.verdict) {
+      console.log(`   ↳ Hybrid override: keyword=${verdict.verdict} → LLM=${llmResult.verdict} → final=${hybrid}`)
+    }
+    // Attach LLM result to verdict object
+    verdict.llm     = llmResult
+    verdict.verdict = hybrid
+    verdict.verdictColor = hybrid === 'PASS' ? '#22c55e' : hybrid === 'FAIL' ? '#ef4444' : '#f59e0b'
+    // Add LLM as a rule row in the verdict breakdown
+    verdict.rules.push({
+      rule:       'LLM_VERDICT',
+      status:     llmResult.verdict,
+      reason:     `${llmResult.reason} (${llmResult.confidence}% confidence, ${llmResult.elapsed}s)`,
+      confidence: llmResult.confidence,
+    })
+  } else {
+    console.log('🧠 LLM: unavailable — keyword verdict used')
+  }
+
   result.verdict   = verdict
   result.autoScore = { score: verdict.verdict, confidence: verdict.confidence,
                        reasons: verdict.rules.map(r => r.reason) }
@@ -627,6 +674,13 @@ async function startServer() {
   })
 
   console.log('✅ Browser launched')
+
+  // Check Ollama on startup
+  isOllamaAvailable().then(ok => {
+    if (ok) console.log('🧠 Ollama available — LLM verdict enabled (llama3.1-local)')
+    else    console.log('🧠 Ollama not running — keyword verdict only (run: ollama serve)')
+  })
+
   wss = new WebSocketServer({ port: PORT })
   console.log(`🚀 Bridge running on ws://localhost:${PORT}`)
   console.log(`📋 Dashboard: open blu_test_dashboard_v4.html\n`)

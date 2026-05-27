@@ -714,7 +714,7 @@ async function handleMessage(msg, ws) {
     try {
       if (msg.type === 'RUN_CASE') {
         const result = await sendMessage(msg.question, msg.id, msg.expectedBehaviour || '', msg.module || '')
-        ws.send(JSON.stringify({ type: 'RESPONSE', id: msg.id, ...result }))
+        ws.send(JSON.stringify({ type: 'RESPONSE', id: msg.id, ...result, msgCount }))
       }
       else if (msg.type === 'DIRECT_SEND') {
         const result = await sendMessage(msg.question, null, '', msg.module || '')
@@ -732,7 +732,7 @@ async function handleMessage(msg, ws) {
         for (const c of cases) {
           if (!botLock) break  // stopped via END_SESSION
           const result = await sendMessage(c.question, c.id, c.expectedBehaviour || '', c.module || '')
-          ws.send(JSON.stringify({ type: 'RESPONSE', id: c.id, ...result }))
+          ws.send(JSON.stringify({ type: 'RESPONSE', id: c.id, ...result, msgCount }))
           done++
           // Persist run state after every case
           writeRunState({

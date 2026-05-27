@@ -386,7 +386,7 @@ input,textarea{font-family:var(--font)}
 </div>
 
 <script>
-let allCases=[],filteredCases=[],results={},responses={},verdicts={},screenshots={}
+let allCases=[],filteredCases=[],results={},responses={},verdicts={},screenshots={},ctaData={}
 let activeMaster='Service',activeModule='All',activeType='All'
 let sessionActive=false,currentEnv='N2P',isDark=true
 let playwrightWS=null,currentChatId=null,currentBugId=null,logOpen=false
@@ -415,7 +415,7 @@ function loadCSV(e){
     const text=ev.target.result
     const lines=text.split('\n')
     const hdr=normaliseHdr(parseCSV(lines[0]))
-    allCases=[];results={};verdicts={};responses={};screenshots={}
+    allCases=[];results={};verdicts={};responses={};screenshots={};ctaData={}
     let i=1
     function chunk(){
       const end=Math.min(i+2000,lines.length)
@@ -738,6 +738,7 @@ function runCase(e,id){
 function onResponse(msg){
   const id=msg.id,c=allCases.find(x=>x.id===id)
   responses[id]=msg.response
+  if(msg.ctaLabels||msg.ctaLinks)ctaData[id]={labels:msg.ctaLabels||[],links:msg.ctaLinks||[]}
   if(msg.verdict)verdicts[id]=msg.verdict
   // backwards compat: server may send autoScore only
   else if(msg.autoScore)verdicts[id]={verdict:msg.autoScore.score,verdictColor:'#f59e0b',rules:[],summary:msg.autoScore.reasons?.join(', ')||'',confidence:msg.autoScore.confidence}
@@ -751,9 +752,16 @@ function onResponse(msg){
 }
 
 function metaHTML(msg){
-  const v=msg.verdict
+  let ctaHtml='✗ No CTA'
+  if(msg.hasCTA&&msg.ctaLabels?.length){
+    const ctaParts=msg.ctaLabels.map((label,i)=>{
+      const link=msg.ctaLinks?.[i]
+      return link?`<span title="${esc(link)}" style="cursor:help;border-bottom:1px dashed var(--green)">${esc(label)} 🔗</span>`:`<span>${esc(label)}</span>`
+    }).join(', ')
+    ctaHtml=`<span style="color:var(--green)">✓ CTA: ${ctaParts}</span>`
+  }
   return `<span class="resp-meta-item">⏱ ${msg.elapsed}s</span>
-  <span class="resp-meta-item">${msg.hasCTA?'<span style="color:var(--green)">✓ CTA</span>':'✗ No CTA'}</span>
+  <span class="resp-meta-item">${ctaHtml}</span>
   ${msg.isHinglish?'<span class="resp-meta-item" style="color:var(--amber)">🌐 Hinglish</span>':''}
   ${msg.bubbleCount>1?`<span class="resp-meta-item" style="color:var(--cyan)">⬡ ${msg.bubbleCount} bubbles merged</span>`:''}
   ${msg.chatId?`<span class="resp-meta-item" style="color:var(--cyan)">ID: ${msg.chatId}</span>`:''}`
@@ -835,17 +843,45 @@ function verdictBadgeStr(s){
   return ''
 }
 
-// ── EXPORT CSV (PATCH: Verdict + Verdict_Detail columns) ──
+// ── EXPORT CSV ──────────────────────────────────────────────────────────────────
+// Column order: Module → L3 → Test Question → In-KB or Gap →
+//               Bot Response → Manual Result → Expected Behaviour →
+//               Verdict → Verdict_Detail → CTA_Labels → CTA_Links → Chat ID
 function exportResults(){
   if(!allCases.length)return
-  const hdr=['Module','L3','Test Question','Expected Behaviour','In-KB or Gap','Verdict','Verdict_Detail','Manual Result','Bot Response','Chat ID']
-  const rows=allCases.map(c=>{
-    const v=verdicts[c.id]
-    const detail=v?.rules?.map(r=>`${r.status} ${r.rule}: ${r.reason}`).join(' | ')||''
-    return[c['Module'],c['L3'],c['Test Question'],c['Expected Behaviour'],c['In-KB or Gap'],v?.verdict||'',detail,results[c.id]||'',responses[c.id]||'',currentChatId||'']
+  const hdr=[
+    'Module','L3','Test Question','In-KB or Gap',
+    'Bot Response','Manual Result','Expected Behaviour',
+    'Verdict','Verdict_Detail','CTA_Labels','CTA_Links','Chat ID'
+  ]
+  const tested=allCases.filter(c=>responses[c.id]||results[c.id]||verdicts[c.id])
+  if(!tested.length){alert('No tested cases to export. Run some tests first.');return}
+  const rows=tested.map(c=>{
+    const v      = verdicts[c.id]
+    const resp   = responses[c.id] || ''
+    const kwRules = v?.rules?.filter(r=>r.rule!=='LLM_VERDICT')
+                      .map(r=>`${r.status} ${r.rule}: ${r.reason}`).join(' | ') || ''
+    const llmRule = v?.rules?.find(r=>r.rule==='LLM_VERDICT')
+    const llmNote = llmRule ? ` | LLM(${llmRule.status}): ${llmRule.reason}` : ''
+    const detail  = kwRules + llmNote
+    const cta     = ctaData[c.id] || {}
+    return [
+      c['Module']||'', c['L3']||'',
+      c['Test Question']||'', c['In-KB or Gap']||'',
+      resp, results[c.id]||'',
+      c['Expected Behaviour']||'',
+      v?.verdict||'', detail,
+      (cta.labels||[]).join(' | '),
+      (cta.links||[]).filter(Boolean).join(' | '),
+      currentChatId||''
+    ]
   })
-  const csv=[hdr,...rows].map(r=>r.map(v=>`"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n')
-  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`blu_results_${currentEnv}_${new Date().toISOString().slice(0,10)}.csv`;a.click()
+  const esc = v => `"${String(v||'').replace(/"/g,'""')}"`
+  const csv = [hdr,...rows].map(r=>r.map(esc).join(',')).join('\n')
+  const a=document.createElement('a')
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}))
+  a.download=`blu_results_${currentEnv}_${new Date().toISOString().slice(0,10)}.csv`
+  a.click()
 }
 
 // ── WEBSOCKET ──

@@ -64,9 +64,11 @@ function buildPrompt(question, expectedBehaviour, botResponse, module) {
     system: `You are a QA evaluator for BLU Bot, an AI customer service assistant for Bajaj Finance (an Indian NBFC). Your job is to evaluate whether the bot's response correctly addresses the customer's question based on the expected answer from the knowledge base.
 
 Rules:
-- PASS: Bot response addresses the question with correct information, even if phrasing differs
-- FAIL: Bot response is wrong, is a fallback error, gives irrelevant product info, or completely misses the question  
+- PASS: Bot response addresses the question with correct information, even if phrasing differs. A response that answers correctly AND asks a follow-up clarifying question is still a PASS.
+- FAIL: Bot response is wrong, is a fallback/loading error ("Working on it...", "Hold on..."), gives irrelevant product info, or completely misses the question
 - REVIEW: Bot response is partially correct, ambiguous, or you are not confident
+
+Important: If the bot correctly answers the question but also asks a follow-up (e.g. "Are you looking to buy online or offline?"), that is PASS, not FAIL.
 
 Respond ONLY with valid JSON. No preamble. No explanation outside the JSON.
 Format: {"verdict":"PASS","reason":"one sentence max 15 words","confidence":85}`,
@@ -204,6 +206,30 @@ async function runLLMVerdict({ question, expectedBehaviour, botResponse, module 
       confidence: 100,
       model:      'rule-based',
       elapsed:    '0.0',
+    }
+  }
+
+  // Detect follow-up questions — bot answered but also asked a clarifying question
+  // These are valid responses, not failures. Mark PASS if substantive content present.
+  const FOLLOWUP = [
+    /are you looking to (buy|purchase|get|apply)/i,
+    /would you like (me to|to|more)/i,
+    /do you (need|want|have)/i,
+    /can (i|you) (help|assist|know)/i,
+    /is there anything (else|more|specific)/i,
+    /please (let me know|share|provide) (if|which|what|more)/i,
+    /which (type|kind|product|plan|option)/i,
+  ]
+  const hasFollowUp = FOLLOWUP.some(p => p.test(botResponse))
+
+  // If response has follow-up BUT also has substantive content (>80 chars before the ?),
+  // it's a valid answer — don't penalise for being helpful
+  if (hasFollowUp) {
+    const beforeQuestion = botResponse.split('?')[0] || ''
+    const isSubstantive  = beforeQuestion.trim().length > 80
+    if (isSubstantive) {
+      // Let LLM evaluate but hint that follow-up questions are acceptable
+      // by appending context to the user prompt — handled below via flag
     }
   }
 

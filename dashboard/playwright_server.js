@@ -335,10 +335,21 @@ async function getNewBotResponses(countBefore) {
       )).filter(el => el.offsetParent !== null)
       const chips = chipEls.map(el => el.innerText.trim()).filter(Boolean).slice(0, 10)
       const ctaEls = newBubbles.flatMap(b =>
-        Array.from(b.querySelectorAll('a, button[class*="cta"], div[class*="cta"]'))
+        Array.from(b.querySelectorAll('a, button[class*="cta"], div[class*="cta"], [onclick*="bajaj"], [href]'))
       )
-      const ctaLabels = ctaEls.map(el => el.innerText.trim()).filter(Boolean)
-      return { text, bubbleCount: newBubbles.length, chips, hasCTA: ctaLabels.length > 0, ctaLabels }
+      // Capture both label and deep link / href for each CTA
+      const ctaItems = ctaEls.map(el => {
+        const label   = el.innerText.trim()
+        const href    = el.getAttribute('href') || ''
+        const onclick = el.getAttribute('onclick') || ''
+        // Extract bajajsuperapp:// deep link from href or onclick
+        const deepMatch = (href + ' ' + onclick).match(/bajajsuperapp:\/\/[^\s"')]+/)
+        const link = deepMatch ? deepMatch[0] : (href && href !== '#' ? href : '')
+        return label ? { label, link } : null
+      }).filter(Boolean)
+      const ctaLabels = ctaItems.map(c => c.label)
+      const ctaLinks  = ctaItems.map(c => c.link)
+      return { text, bubbleCount: newBubbles.length, chips, hasCTA: ctaLabels.length > 0, ctaLabels, ctaLinks }
     }, countBefore)
 
     const elapsed    = ((Date.now() - start) / 1000).toFixed(1)
@@ -346,14 +357,17 @@ async function getNewBotResponses(countBefore) {
     if (result.bubbleCount > 1) console.log(`🤖 ${result.bubbleCount} bubbles (${elapsed}s): ${result.text.substring(0,100)}`)
     else console.log(`🤖 Response (${elapsed}s): ${result.text.substring(0,100)}`)
     if (result.chips.length) console.log(`  💬 Chips: ${result.chips.join(' | ')}`)
-    if (result.hasCTA)       console.log(`  🔗 CTAs: ${result.ctaLabels.join(' | ')}`)
+    if (result.hasCTA) {
+      const ctaDisplay = result.ctaLabels.map((l,i) => result.ctaLinks?.[i] ? `${l} → ${result.ctaLinks[i]}` : l).join(' | ')
+      console.log(`  🔗 CTAs: ${ctaDisplay}`)
+    }
     if (isHinglish)          console.log(`  🌐 Hinglish detected`)
     return { response: result.text || '(response not captured)', bubbleCount: result.bubbleCount,
              chips: result.chips, hasCTA: result.hasCTA, ctaLabels: result.ctaLabels,
              elapsed, isHinglish, chatId: currentChatId }
   } catch (e) { console.log('⚠️  Response capture error:', e.message) }
   return { response: '(response not captured)', bubbleCount: 0, chips: [], hasCTA: false,
-           ctaLabels: [], elapsed: '?', isHinglish: false, chatId: null }
+           ctaLabels: [], ctaLinks: [], elapsed: '?', isHinglish: false, chatId: null }
 }
 
 // ── HINGLISH DETECTION ───────────────────────────────────────────────────────
@@ -428,7 +442,7 @@ async function sendMessage(question, caseId = null, expectedBehaviour = '', modu
   const result  = await getNewBotResponses(countBefore)
   const verdict = runVerdict({
     question, response: result.response, chips: result.chips,
-    hasCTA: result.hasCTA, ctaLabels: result.ctaLabels,
+    hasCTA: result.hasCTA, ctaLabels: result.ctaLabels, ctaLinks: result.ctaLinks,
     isHinglish: result.isHinglish, module, expectedBehaviour,
   })
 

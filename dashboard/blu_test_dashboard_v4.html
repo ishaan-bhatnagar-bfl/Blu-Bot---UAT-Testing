@@ -105,6 +105,15 @@ input,textarea{font-family:var(--font)}
 .cta-chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-family:var(--font-mono);padding:2px 8px;border-radius:20px;border:1px solid var(--green-border);background:var(--green-dim);color:var(--green);cursor:pointer;transition:all var(--transition);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cta-chip:hover{opacity:0.8}
 .cta-chips-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+/* UAT PARITY */
+.parity-btn{font-size:10px;font-weight:600;padding:3px 9px;border-radius:3px;border:1px solid var(--cyan-dim);background:var(--cyan-dim);color:var(--cyan);cursor:pointer;transition:all var(--transition);display:none}
+.parity-btn.show{display:inline-block}
+.parity-btn:hover{opacity:0.8}
+.parity-result{margin-top:8px;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-md);font-size:11px;display:none}
+.parity-result.show{display:block}
+.parity-match{background:var(--green-dim);border-color:var(--green-border);color:var(--text-secondary)}
+.parity-mismatch{background:var(--red-dim);border-color:var(--red-border);color:var(--text-secondary)}
+.parity-label{font-weight:700;margin-bottom:4px}
 .toolbar{display:flex;align-items:center;gap:6px;padding:8px 16px;background:var(--bg-surface);border-bottom:1px solid var(--border);flex-wrap:wrap}
 .filter-pills{display:flex;gap:4px}
 .fpill{font-size:11px;font-weight:500;padding:4px 11px;border-radius:20px;border:1px solid var(--border-md);background:transparent;color:var(--text-tertiary);cursor:pointer;transition:all var(--transition);white-space:nowrap}
@@ -700,6 +709,9 @@ function rowHTML(c, i){
         </div>`:''}
         ${v?`<div class="resp-section-title" style="margin-top:14px">Verdict Breakdown</div>${verdictRulesHTML(v)}`:''}        <div class="resp-meta" id="meta-${c.id}"></div>
         <div class="cta-chips-row" id="ctachips-${c.id}"></div>
+        <button class="parity-btn ${resp?'show':''}" id="paritybtn-${c.id}"
+          onclick="runParityCheck(event,${c.id})">⚖ Check on UAT</button>
+        <div class="parity-result" id="parityresult-${c.id}"></div>
         ${ss?`<div class="resp-screenshot"><img src="data:image/png;base64,${ss.b64}" onclick="window.open('data:image/png;base64,${ss.b64}')"></div>`:''}        `:`<div class="resp-text loading" id="resp-${c.id}">—</div>`}
       </div>
     </div>`
@@ -802,6 +814,9 @@ function onResponse(msg){
   const id=msg.id,c=allCases.find(x=>x.id===id)
   responses[id]=msg.response
   if(msg.ctaLabels||msg.ctaLinks)ctaData[id]={labels:msg.ctaLabels||[],links:msg.ctaLinks||[]}
+  // Show parity button when response is loaded
+  const pb=document.getElementById('paritybtn-'+id)
+  if(pb)pb.classList.add('show')
   if(msg.verdict)verdicts[id]=msg.verdict
   // backwards compat: server may send autoScore only
   else if(msg.autoScore)verdicts[id]={verdict:msg.autoScore.score,verdictColor:'#f59e0b',rules:[],summary:msg.autoScore.reasons?.join(', ')||'',confidence:msg.autoScore.confidence}
@@ -964,6 +979,46 @@ function verdictBadgeStr(s){
   return ''
 }
 
+// ── UAT PARITY CHECK ─────────────────────────────────────────────────────────
+function runParityCheck(e,id){
+  e.stopPropagation()
+  if(!sessionActive){alert('Connect to bot first');return}
+  const c=allCases.find(x=>x.id===id)
+  const v=verdicts[id]
+  if(!c||!responses[id]){alert('Run this test case first');return}
+  const btn=document.getElementById('paritybtn-'+id)
+  btn.textContent='⚖ Checking UAT…';btn.disabled=true
+  const resultDiv=document.getElementById('parityresult-'+id)
+  resultDiv.innerHTML='<span style="color:var(--text-tertiary);font-size:11px">Running on UAT…</span>'
+  resultDiv.className='parity-result show'
+  sendToPlaywright({
+    type:'PARITY_CHECK', id,
+    question:          c['Test Question'],
+    expectedBehaviour: c['Expected Behaviour']||'',
+    module:            c['Module']||'',
+    n2pVerdict:        v?.verdict||'',
+    mobile:            '9953333141',
+  })
+}
+function onParityResult(msg){
+  const btn=document.getElementById('paritybtn-'+msg.id)
+  if(btn){btn.textContent='⚖ Check on UAT';btn.disabled=false}
+  const div=document.getElementById('parityresult-'+msg.id)
+  if(!div)return
+  if(msg.error){
+    div.innerHTML=`<span style="color:var(--red)">UAT check failed: ${esc(msg.error)}</span>`
+    div.className='parity-result show'
+    return
+  }
+  const match   = msg.match
+  const icon    = match?'✓':'⚠'
+  const label   = match?'N2P = UAT':'N2P ≠ UAT — mismatch'
+  div.className = `parity-result show ${match?'parity-match':'parity-mismatch'}`
+  div.innerHTML = `<div class="parity-label">${icon} ${label}</div>
+    <div>N2P: <b>${msg.n2pVerdict||'—'}</b> &nbsp;|&nbsp; UAT: <b>${msg.uatVerdict||'—'}</b></div>
+    <div style="margin-top:6px;color:var(--text-tertiary)">UAT response: ${esc((msg.uatResponse||'').substring(0,120))}${(msg.uatResponse||'').length>120?'…':''}</div>`
+}
+
 // ── RESUME RUN ──────────────────────────────────────────────────────────────
 let _runState = null
 
@@ -1079,6 +1134,7 @@ function connectWS(){
         else if(msg.type==='LOG_ENTRY'){const v=msg.entry?.verdict;addLog({type:v==='FAIL'?'fail':'test',q:msg.entry?.question,r:msg.entry?.response,t:msg.entry?.elapsed,s:v||msg.entry?.autoScore})}
         else if(msg.type==='SESSION_RESET')addLog({type:'login',q:'Auto-reset (30 msg limit)',r:''})
         else if(msg.type==='RUN_STATE'){onRunState(msg.state)}
+        else if(msg.type==='PARITY_RESULT'){onParityResult(msg)}
         else if(msg.type==='REAUTH_START'){
           const b=document.getElementById('reauthBanner')
           b.style.display='flex';b.classList.add('show')

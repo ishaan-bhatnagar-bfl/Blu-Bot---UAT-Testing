@@ -249,38 +249,31 @@ function ruleKeywordMatch({ response, expectedBehaviour }) {
   if (!response || !expectedBehaviour) {
     return { rule: ruleName, status: 'REVIEW', reason: 'No expected behaviour to match against', confidence: 0 }
   }
-  const resp = response.toLowerCase()
-  const expected = expectedBehaviour.toLowerCase()
 
-  const keywords = expected
-    .replace(/<[^>]+>/g, ' ')   // strip HTML
-    .replace(/[^\w\s]/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length > 4 && ![
-      'should','would','could','provide','accurate','information','with','that',
-      'this','from','will','have','been','your','their','please','bajaj','finserv',
-      'click','label','android','link','https'
-    ].includes(w))
-    .slice(0, 10)
-
-  if (keywords.length === 0) {
-    return { rule: ruleName, status: 'REVIEW', reason: 'No scoreable keywords in expected behaviour', confidence: 50 }
-  }
-
-  const matched = keywords.filter(k => resp.includes(k))
-  const confidence = Math.round((matched.length / keywords.length) * 100)
-
-  if (confidence >= 50) {
-    return { rule: ruleName, status: 'PASS', reason: `${matched.length}/${keywords.length} keywords matched (${confidence}%)`, confidence }
-  }
-  if (confidence >= 25) {
-    return { rule: ruleName, status: 'REVIEW', reason: `${matched.length}/${keywords.length} keywords matched (${confidence}%) — borderline`, confidence }
-  }
-  return {
-    rule: ruleName,
-    status: 'FAIL',
-    reason: `Only ${matched.length}/${keywords.length} keywords matched (${confidence}%)`,
-    confidence
+  // Use semantic TF-IDF scoring if available, fall back to keyword overlap
+  try {
+    const { semanticScore } = require('./semantic_scorer')
+    const result = semanticScore(expectedBehaviour, response)
+    return {
+      rule:       ruleName,
+      status:     result.verdict,
+      reason:     result.reason,
+      confidence: result.confidence,
+    }
+  } catch {
+    // Fallback: keyword overlap (semantic_scorer not available)
+    const resp     = response.toLowerCase()
+    const expected = expectedBehaviour.toLowerCase()
+    const keywords = expected
+      .replace(/<[^>]+>/g, ' ').replace(/[^\w\s]/g, ' ').split(/\s+/)
+      .filter(w => w.length > 4 && !['should','would','could','provide','accurate',
+        'information','please','bajaj','finserv','click','label','https'].includes(w))
+      .slice(0, 10)
+    if (!keywords.length) return { rule: ruleName, status: 'REVIEW', reason: 'No scoreable keywords', confidence: 50 }
+    const matched    = keywords.filter(k => resp.includes(k))
+    const confidence = Math.round((matched.length / keywords.length) * 100)
+    const status     = confidence >= 50 ? 'PASS' : confidence >= 25 ? 'REVIEW' : 'FAIL'
+    return { rule: ruleName, status, reason: `${matched.length}/${keywords.length} keywords matched (${confidence}%) [fallback]`, confidence }
   }
 }
 

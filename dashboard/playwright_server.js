@@ -45,6 +45,10 @@ let sessionLog    = []
 let currentChatId = null
 let currentEnv    = 'N2P'
 let msgCount      = 0
+// UAT parity — second page for side-by-side comparison
+let parityCtx  = null
+let parityPage = null
+let parityBusy = false
 
 // ── CONCURRENCY CONTROL ────────────────────────────
 // Single mutex — only one operation touches the bot at a time.
@@ -679,6 +683,79 @@ async function handleMessage(msg, ws) {
   else if (msg.type === 'CLEAR_RUN_STATE') {
     clearRunState()
     console.log('🗑️  Run state cleared')
+  }
+  else if (msg.type === 'PARITY_CHECK') {
+    if (parityBusy) {
+      ws.send(JSON.stringify({ type: 'PARITY_RESULT', id: msg.id, error: 'Parity check already in progress' }))
+      return
+    }
+    parityBusy = true
+    try {
+      // Launch UAT page if not already open
+      const uatUrl = BOT_URLS['UAT']
+      if (!parityCtx) {
+        parityCtx  = await browser.newContext({ viewport: { width: 480, height: 820 } })
+        parityPage = await parityCtx.newPage()
+      }
+      console.log(`🔄 Parity check: ${msg.question.substring(0,50)}`)
+      // Login to UAT (uses standard OTP 123465)
+      await parityPage.goto(uatUrl, { waitUntil: 'domcontentloaded' })
+      await parityPage.waitForTimeout(3000)
+      // Send mobile
+      await parityPage.waitForSelector('textarea', { timeout: 10000 }).catch(()=>{})
+      await parityPage.fill('textarea', msg.mobile || '9953333141')
+      await parityPage.keyboard.press('Enter')
+      await parityPage.waitForTimeout(3000)
+      // Send UAT OTP
+      await parityPage.fill('textarea', '123465')
+      await parityPage.keyboard.press('Enter')
+      await parityPage.waitForTimeout(3000)
+      // Send the question
+      const countBefore = await parityPage.evaluate(() =>
+        document.querySelectorAll('div.blu-bot-message').length
+      ).catch(() => 0)
+      await parityPage.fill('textarea', msg.question)
+      await parityPage.keyboard.press('Enter')
+      // Wait for response
+      let waited = 0
+      while (waited < 20000) {
+        await parityPage.waitForTimeout(1000)
+        waited += 1000
+        const count = await parityPage.evaluate(() =>
+          document.querySelectorAll('div.blu-bot-message').length
+        ).catch(() => 0)
+        if (count > countBefore) break
+      }
+      await parityPage.waitForTimeout(2000)
+      // Get response
+      const uatResponse = await parityPage.evaluate(() => {
+        const msgs = Array.from(document.querySelectorAll('div.blu-bot-message'))
+        const last = msgs[msgs.length - 1]
+        return last?.innerText?.trim() || '(no response)'
+      }).catch(() => '(capture failed)')
+      // Score UAT response
+      const uatVerdict = runVerdict({
+        question: msg.question, response: uatResponse,
+        module: msg.module || '', expectedBehaviour: msg.expectedBehaviour || '',
+      })
+      console.log(`  N2P: ${msg.n2pVerdict} | UAT: ${uatVerdict.verdict}`)
+      ws.send(JSON.stringify({
+        type:        'PARITY_RESULT',
+        id:          msg.id,
+        uatResponse,
+        uatVerdict:  uatVerdict.verdict,
+        uatRules:    uatVerdict.rules,
+        n2pVerdict:  msg.n2pVerdict,
+        match:       msg.n2pVerdict === uatVerdict.verdict,
+      }))
+      // Navigate away to reset UAT session
+      await parityPage.goto('about:blank').catch(() => {})
+    } catch (e) {
+      console.log('⚠️  Parity check error:', e.message)
+      ws.send(JSON.stringify({ type: 'PARITY_RESULT', id: msg.id, error: e.message }))
+    } finally {
+      parityBusy = false
+    }
   }
   // Re-auth OTP submitted from dashboard during N2P re-auth wait
   else if (msg.type === 'REAUTH_OTP') {

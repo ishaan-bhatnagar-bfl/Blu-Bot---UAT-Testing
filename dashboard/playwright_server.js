@@ -17,6 +17,20 @@ let MOBILE = '9953333141'
 let STORED_OTP = ''  // stored for re-auth after reset
 const SCREENSHOTS_DIR = path.join(__dirname, '..', 'automation', 'test-output', 'screenshots')
 const LOG_PATH        = path.join(__dirname, '..', 'automation', 'test-output', 'session_log.json')
+const RUN_STATE_PATH  = path.join(__dirname, '..', 'automation', 'test-output', '.run_state.json')
+
+function writeRunState(state) {
+  try { fs.writeFileSync(RUN_STATE_PATH, JSON.stringify(state, null, 2)) } catch {}
+}
+function readRunState() {
+  try {
+    if (fs.existsSync(RUN_STATE_PATH)) return JSON.parse(fs.readFileSync(RUN_STATE_PATH, 'utf-8'))
+  } catch {}
+  return null
+}
+function clearRunState() {
+  try { if (fs.existsSync(RUN_STATE_PATH)) fs.unlinkSync(RUN_STATE_PATH) } catch {}
+}
 
 const BOT_URLS = {
   N2P:  'https://bflaiassist-n2p.bajajfinserv.in/blu/?jid=blu',
@@ -604,17 +618,36 @@ async function handleMessage(msg, ws) {
         ws.send(JSON.stringify({ type: 'CHIP_RESPONSE', chip: msg.chip, caseId: msg.caseId, ...result }))
       }
       else if (msg.type === 'BULK_RUN') {
-        const cases = msg.cases || []
-        const delay = msg.delay || 3000
+        const cases  = msg.cases || []
+        const delay  = msg.delay || 3000
+        const total  = cases.length
+        let   done   = 0
         for (const c of cases) {
+          if (!botLock) break  // stopped via END_SESSION
           const result = await sendMessage(c.question, c.id, c.expectedBehaviour || '', c.module || '')
           ws.send(JSON.stringify({ type: 'RESPONSE', id: c.id, ...result }))
+          done++
+          // Persist run state after every case
+          writeRunState({
+            lastTcId:    c.id,
+            done,
+            total,
+            module:      c.module || '',
+            env:         currentEnv,
+            ts:          new Date().toISOString(),
+          })
           // Brief release between cases — lets queued single messages sneak in
           releaseLock()
           await page.waitForTimeout(delay)
           acquireLock()
         }
-        ws.send(JSON.stringify({ type: 'BULK_RUN_DONE', count: cases.length }))
+        ws.send(JSON.stringify({ type: 'BULK_RUN_DONE', count: done }))
+        // Clear run state on clean completion
+        if (done === total) clearRunState()
+      }
+      else if (msg.type === 'GET_RUN_STATE') {
+        const state = readRunState()
+        ws.send(JSON.stringify({ type: 'RUN_STATE', state }))
       }
     } finally {
       releaseLock()
@@ -642,6 +675,10 @@ async function handleMessage(msg, ws) {
     msgCount = 0
     botLock  = false
     console.log('🔒 Session ended — queue cleared')
+  }
+  else if (msg.type === 'CLEAR_RUN_STATE') {
+    clearRunState()
+    console.log('🗑️  Run state cleared')
   }
   // Re-auth OTP submitted from dashboard during N2P re-auth wait
   else if (msg.type === 'REAUTH_OTP') {

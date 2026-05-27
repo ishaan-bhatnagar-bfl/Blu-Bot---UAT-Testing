@@ -78,6 +78,12 @@ input,textarea{font-family:var(--font)}
 .retry-banner{display:none;align-items:center;gap:8px;padding:6px 18px;background:var(--amber-dim);border-bottom:1px solid rgba(245,158,11,0.3);font-size:11px;color:var(--amber)}
 .retry-banner.show{display:flex}
 .reauth-banner-show{display:flex!important}
+/* RESUME BANNER */
+.resume-banner{display:none;align-items:center;gap:10px;padding:8px 18px;background:var(--accent-dim);border-bottom:1px solid var(--accent-border);font-size:12px;color:var(--accent)}
+.resume-banner.show{display:flex}
+.resume-btn{padding:4px 14px;border-radius:4px;border:1px solid var(--accent-border);background:var(--accent);color:#fff;font-size:11px;font-weight:600;cursor:pointer}
+.resume-dismiss{margin-left:4px;font-size:11px;color:var(--accent);opacity:0.6;cursor:pointer}
+.resume-dismiss:hover{opacity:1}
 /* BULK PROGRESS BAR */
 .bulk-progress{display:none;padding:8px 16px;background:var(--bg-surface);border-bottom:1px solid var(--border);gap:12px;align-items:center}
 .bulk-progress.show{display:flex}
@@ -354,6 +360,12 @@ input,textarea{font-family:var(--font)}
     <!-- RETRY WAIT BANNER -->
     <div class="retry-banner" id="retryBanner">
       ⏳ <span id="retryCountdown">Bot retry countdown active — waiting…</span>
+    </div>
+    <!-- RESUME BANNER -->
+    <div class="resume-banner" id="resumeBanner">
+      ⏮ <span id="resumeText">Previous run found</span>
+      <button class="resume-btn" onclick="resumeRun()">Resume</button>
+      <span class="resume-dismiss" onclick="dismissResume()">Dismiss</span>
     </div>
     <!-- BULK PROGRESS BAR -->
     <div class="bulk-progress" id="bulkProgress">
@@ -758,6 +770,8 @@ function onLoginOK(restored){
   sessionActive=true;document.getElementById('sessionBanner').classList.add('show')
   document.getElementById('sessionText').textContent=`Session active — ${currentEnv}${restored?' · restored':''}`
   document.getElementById('loginBtn').style.display='none';document.getElementById('bulkBtn').disabled=false;renderList()
+  // Check for previous incomplete run
+  setTimeout(()=>sendToPlaywright({type:'GET_RUN_STATE'}),500)
 }
 function endSession(){
   sessionActive=false;document.getElementById('sessionBanner').classList.remove('show')
@@ -950,6 +964,37 @@ function verdictBadgeStr(s){
   return ''
 }
 
+// ── RESUME RUN ──────────────────────────────────────────────────────────────
+let _runState = null
+
+function onRunState(state){
+  if(!state)return
+  _runState = state
+  const d = new Date(state.ts)
+  const dateStr = d.toLocaleDateString('en-IN',{day:'numeric',month:'short'})
+  const timeStr = d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})
+  document.getElementById('resumeText').textContent =
+    `Last run: ${state.done}/${state.total} cases on ${dateStr} ${timeStr} (last: ${state.lastTcId})`
+  document.getElementById('resumeBanner').classList.add('show')
+}
+
+function resumeRun(){
+  if(!_runState)return
+  dismissResume()
+  // Activate untested first so remaining cases surface
+  if(!untestedFirst) toggleUntestedFirst()
+  // Scroll to and open last tested case if visible
+  const lastRow = document.getElementById('row-'+_runState.lastTcId)
+  if(lastRow) lastRow.closest('.test-item')?.scrollIntoView({behavior:'smooth',block:'center'})
+  addLog({type:'login',q:`Resumed from ${_runState.lastTcId} (${_runState.done}/${_runState.total} done)`,r:''})
+}
+
+function dismissResume(){
+  document.getElementById('resumeBanner').classList.remove('show')
+  // Tell server to clear run state
+  sendToPlaywright({type:'CLEAR_RUN_STATE'})
+}
+
 // ── EXPORT CSV ──────────────────────────────────────────────────────────────────
 // Column order: Module → L3 → Test Question → In-KB or Gap →
 //               Bot Response → Manual Result → Expected Behaviour →
@@ -1033,6 +1078,7 @@ function connectWS(){
         }
         else if(msg.type==='LOG_ENTRY'){const v=msg.entry?.verdict;addLog({type:v==='FAIL'?'fail':'test',q:msg.entry?.question,r:msg.entry?.response,t:msg.entry?.elapsed,s:v||msg.entry?.autoScore})}
         else if(msg.type==='SESSION_RESET')addLog({type:'login',q:'Auto-reset (30 msg limit)',r:''})
+        else if(msg.type==='RUN_STATE'){onRunState(msg.state)}
         else if(msg.type==='REAUTH_START'){
           const b=document.getElementById('reauthBanner')
           b.style.display='flex';b.classList.add('show')

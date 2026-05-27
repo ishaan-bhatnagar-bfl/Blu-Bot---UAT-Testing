@@ -391,6 +391,7 @@ input,textarea{font-family:var(--font)}
       </div>
       <div class="tb-right">
         <span class="count-label">Showing <b id="showCount">0</b></span>
+        <button class="tb-btn icon" id="untestedFirstBtn" onclick="toggleUntestedFirst()" title="Untested first — puts untested cases at top of list" style="font-size:11px;padding:4px 10px;border-color:var(--border-md);color:var(--text-tertiary)">⏭ Untested first</button>
         <button class="bulk-btn" id="bulkBtn" onclick="bulkRun()" disabled>⚡ Bulk Run</button>
       </div>
     </div>
@@ -532,6 +533,16 @@ function applyFilters(){
     if(q&&!c['Test Question'].toLowerCase().includes(q))return false
     return true
   })
+  // Untested first: sort cases with no verdict/response to top
+  if(untestedFirst){
+    filteredCases.sort((a,b)=>{
+      const aUntested=!results[a.id]&&!verdicts[a.id]
+      const bUntested=!results[b.id]&&!verdicts[b.id]
+      if(aUntested&&!bUntested)return -1
+      if(!aUntested&&bUntested)return 1
+      return 0
+    })
+  }
   document.getElementById('showCount').textContent=filteredCases.length
   document.getElementById('bulkBtn').disabled=!sessionActive||!filteredCases.length
   renderList()
@@ -807,6 +818,24 @@ function metaHTML(msg){
 
 // ── BULK RUN (PATCH: pass module per case) ──
 let bulkRunning=false,bulkTotal=0,bulkDone=0,bulkPassC=0,bulkFailC=0,bulkReviewC=0
+let untestedFirst=false
+
+function toggleUntestedFirst(){
+  untestedFirst=!untestedFirst
+  const btn=document.getElementById('untestedFirstBtn')
+  if(untestedFirst){
+    btn.style.background='var(--accent-dim)'
+    btn.style.color='var(--accent)'
+    btn.style.borderColor='var(--accent-border)'
+    btn.title='Untested first ON — untested cases shown at top'
+  } else {
+    btn.style.background=''
+    btn.style.color='var(--text-tertiary)'
+    btn.style.borderColor='var(--border-md)'
+    btn.title='Untested first — puts untested cases at top of list'
+  }
+  applyFilters()
+}
 
 function stopBulkRun(){
   bulkRunning=false
@@ -845,7 +874,9 @@ function endBulkProgress(){
 async function bulkRun(){
   if(!sessionActive||!filteredCases.length)return
   const delay=parseInt(prompt('Delay between messages (ms)?','3000')||'3000')
-  const cases=filteredCases.slice(0,50).map(c=>({id:c.id,question:c['Test Question'],expectedBehaviour:c['Expected Behaviour']||'',module:c['Module']||''}))
+  const maxCases=parseInt(prompt(`How many cases to run? (${filteredCases.length} available)`,'50')||'50')
+  if(isNaN(maxCases)||maxCases<1)return
+  const cases=filteredCases.slice(0,maxCases).map(c=>({id:c.id,question:c['Test Question'],expectedBehaviour:c['Expected Behaviour']||'',module:c['Module']||''}))
   startBulkProgress(cases.length)
   document.getElementById('bulkBtn').textContent='Running…'
   document.getElementById('bulkBtn').disabled=true

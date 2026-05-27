@@ -105,6 +105,17 @@ input,textarea{font-family:var(--font)}
 .cta-chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-family:var(--font-mono);padding:2px 8px;border-radius:20px;border:1px solid var(--green-border);background:var(--green-dim);color:var(--green);cursor:pointer;transition:all var(--transition);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cta-chip:hover{opacity:0.8}
 .cta-chips-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.mt-chip-section{margin-top:10px;padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--accent-border);background:var(--accent-dim)}
+.mt-chip-label{font-size:10px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.mt-chip-countdown{font-size:10px;font-family:var(--font-mono);color:var(--text-tertiary);margin-left:auto}
+.mt-chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.mt-chip-btn{padding:5px 14px;border-radius:20px;border:1px solid var(--accent-border);background:var(--bg-raised);color:var(--accent);font-size:12px;font-weight:500;cursor:pointer;transition:all var(--transition)}
+.mt-chip-btn:hover{background:var(--accent);color:#fff}
+.mt-chip-btn:disabled{opacity:0.4;cursor:not-allowed}
+.mt-chip-skip{padding:5px 12px;border-radius:20px;border:1px solid var(--border-md);background:transparent;color:var(--text-tertiary);font-size:11px;cursor:pointer}
+.mt-chip-skip:hover{color:var(--text-secondary)}
+.mt-resolved{font-size:11px;color:var(--green);margin-top:6px}
+.mt-timeout{font-size:11px;color:var(--amber);margin-top:6px}
 /* UAT PARITY */
 .parity-btn{font-size:10px;font-weight:600;padding:3px 9px;border-radius:3px;border:1px solid var(--cyan-dim);background:var(--cyan-dim);color:var(--cyan);cursor:pointer;transition:all var(--transition);display:none}
 .parity-btn.show{display:inline-block}
@@ -824,6 +835,19 @@ function onResponse(msg){
   renderList()
   const meta=document.getElementById('meta-'+id)
   if(meta)meta.innerHTML=metaHTML(msg)
+  // CTA chips with https:// Open + bajajsuperapp:// Copy
+  const ctaRow=document.getElementById('ctachips-'+id)
+  if(ctaRow&&msg.ctaLabels?.length){
+    ctaRow.innerHTML=msg.ctaLabels.map((label,i)=>{
+      const link   = msg.ctaLinks?.[i]||''
+      const isWeb  = link.startsWith('http')
+      const isDeep = link.startsWith('bajajsuperapp')
+      const openBtn  = isWeb  ? `<a class="cta-open-btn" href="${link}" target="_blank" rel="noopener">↗ Open</a>` : ''
+      const copyBtn  = isDeep ? `<span class="cta-chip" title="${link}" onclick="navigator.clipboard.writeText(${JSON.stringify(link)});this.textContent='Copied!';setTimeout(()=>this.textContent='📋 Deep link',1200)">📋 Deep link</span>` : ''
+      return `<span class="cta-chip" style="cursor:default">${esc(label)}</span>${openBtn}${copyBtn}`
+    }).join('')
+  }
+  if(bulkRunning){const v=verdicts[id];updateBulkProgress(v?.verdict||'REVIEW')}
   buildSidebar();updateStats()
   const v=verdicts[id]
   addLog({type:v?.verdict==='FAIL'?'fail':'test',q:c?.['Test Question'],r:msg.response,t:msg.elapsed,s:v?.verdict})
@@ -977,6 +1001,67 @@ function verdictBadgeStr(s){
   if(s==='REVIEW')return `<span class="score-tag score-review">~ REVIEW</span>`
   if(s==='SOURCING_SKIP')return `<span class="score-tag score-skip">⊘ SKIP</span>`
   return ''
+}
+
+// ── MULTI-TURN CHIP HANDLER ─────────────────────────────────────────────────
+let _mtTimers = {}
+
+function onAwaitChip(msg){
+  const id=msg.caseId, chips=msg.chips||[], timeout=msg.timeout||60000
+  const section=document.getElementById('mtchips-'+id)
+  if(!section)return
+  document.getElementById('panel-'+id)?.classList.add('open')
+  section.style.display='block'
+  let remaining=Math.round(timeout/1000)
+  section.innerHTML=`
+    <div class="mt-chip-label">
+      <span>🔀 Select product to continue test</span>
+      <span class="mt-chip-countdown" id="mtcount-${id}">${remaining}s</span>
+    </div>
+    <div class="mt-chip-row" id="mtrow-${id}">
+      ${chips.map(c=>{const safe=c.replace(/['\\\/]/g,'');return `<button class="mt-chip-btn" onclick="selectMTChip(event,${id},'${safe}')">${esc(c)}</button>`}).join('')}
+      <button class="mt-chip-skip" onclick="skipMTChip(${id})">Skip (REVIEW)</button>
+    </div>`
+  _mtTimers[id]=setInterval(()=>{
+    remaining--
+    const el=document.getElementById('mtcount-'+id)
+    if(el)el.textContent=remaining+'s'
+    if(remaining<=0){clearInterval(_mtTimers[id]);delete _mtTimers[id];skipMTChip(id)}
+  },1000)
+}
+
+function selectMTChip(e,id,chip){
+  e.stopPropagation()
+  clearInterval(_mtTimers[id]);delete _mtTimers[id]
+  const row=document.getElementById('mtrow-'+id)
+  if(row)row.querySelectorAll('button').forEach(b=>{b.disabled=true})
+  const resolved=document.createElement('div')
+  resolved.className='mt-resolved'
+  resolved.textContent='✓ Selected: '+chip+' — waiting for bot response…'
+  document.getElementById('mtchips-'+id)?.appendChild(resolved)
+  sendToPlaywright({type:'CHIP_SELECTED',chip,caseId:id})
+  addLog({type:'test',q:'Chip selected: '+chip,r:''})
+}
+
+function skipMTChip(id){
+  clearInterval(_mtTimers[id]);delete _mtTimers[id]
+  const row=document.getElementById('mtrow-'+id)
+  if(row)row.querySelectorAll('button').forEach(b=>{b.disabled=true})
+  const timeout=document.createElement('div')
+  timeout.className='mt-timeout'
+  timeout.textContent='⚠ No chip selected — case marked REVIEW'
+  document.getElementById('mtchips-'+id)?.appendChild(timeout)
+  sendToPlaywright({type:'CHIP_SELECTED',chip:null,caseId:id})
+}
+
+function onChipResolved(msg){
+  const resolved=document.querySelector('#mtchips-'+msg.id+' .mt-resolved')
+  if(resolved)resolved.textContent='✓ '+msg.chip+' selected — response received'
+}
+
+function onChipTimeout(msg){
+  const el=document.querySelector('#mtchips-'+msg.id+' .mt-timeout')
+  if(el)el.textContent='⚠ Timed out — marked REVIEW'
 }
 
 // ── UAT PARITY CHECK ─────────────────────────────────────────────────────────
@@ -1135,6 +1220,9 @@ function connectWS(){
         else if(msg.type==='SESSION_RESET')addLog({type:'login',q:'Auto-reset (30 msg limit)',r:''})
         else if(msg.type==='RUN_STATE'){onRunState(msg.state)}
         else if(msg.type==='PARITY_RESULT'){onParityResult(msg)}
+        else if(msg.type==='AWAIT_CHIP'){onAwaitChip(msg)}
+        else if(msg.type==='CHIP_RESOLVED'){onChipResolved(msg)}
+        else if(msg.type==='CHIP_TIMEOUT'){onChipTimeout(msg)}
         else if(msg.type==='REAUTH_START'){
           const b=document.getElementById('reauthBanner')
           b.style.display='flex';b.classList.add('show')

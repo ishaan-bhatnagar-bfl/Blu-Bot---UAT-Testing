@@ -49,6 +49,7 @@ let msgCount      = 0
 let parityCtx  = null
 let parityPage = null
 let parityBusy = false
+let pendingChipResolve = null  // resolves when user clicks a chip in dashboard
 
 // ── CONCURRENCY CONTROL ────────────────────────────
 // Single mutex — only one operation touches the bot at a time.
@@ -458,13 +459,65 @@ async function sendMessage(question, caseId = null, expectedBehaviour = '', modu
   }
 
   const result  = await getNewBotResponses(countBefore)
+
+  // Multi-turn: detect disambiguation, wait up to 60s for chip selection
+  const DISAMBIG_PAT = [
+    /please select the relation to move further/i,
+    /select (a |the )?(product|relation|loan|card|account)/i,
+    /which (loan|product|account|card|relation)/i,
+    /you have multiple (product|relation|loan)/i,
+    /please (choose|select|pick) (your |a )?(product|loan|card|relation|account)/i,
+  ]
+  const isDisambig = DISAMBIG_PAT.some(p => p.test(result.response))
+
+  if (isDisambig && caseId && result.chips.length > 0) {
+    console.log('Multi-turn disambig for case ' + caseId + ' — awaiting chip (60s)')
+    if (activeWs) activeWs.send(JSON.stringify({
+      type: 'AWAIT_CHIP', caseId, chips: result.chips,
+      originalQuestion: question, module, expectedBehaviour, timeout: 60000,
+    }))
+    const selectedChip = await new Promise(resolve => {
+      pendingChipResolve = resolve
+      setTimeout(() => {
+        if (pendingChipResolve) { pendingChipResolve(null); pendingChipResolve = null }
+      }, 60000)
+    })
+    if (selectedChip) {
+      console.log('User selected chip: ' + selectedChip)
+      const chipCountBefore = await page.evaluate(() =>
+        document.querySelectorAll('div.blu-bot-message').length
+      ).catch(() => 0)
+      await page.evaluate((text) => {
+        const btn = Array.from(document.querySelectorAll('button.overlap:not([disabled])'))
+          .find(b => b.innerText.trim() === text)
+        if (btn) btn.click()
+      }, selectedChip)
+      await waitForBotToSettle(chipCountBefore)
+      const chipResult = await getNewBotResponses(chipCountBefore)
+      result.response    = chipResult.response
+      result.chips       = chipResult.chips
+      result.hasCTA      = chipResult.hasCTA
+      result.ctaLabels   = chipResult.ctaLabels
+      result.ctaLinks    = chipResult.ctaLinks
+      result.isHinglish  = chipResult.isHinglish
+      result.bubbleCount = chipResult.bubbleCount
+      result.elapsed     = chipResult.elapsed
+      result.multiTurnChip = selectedChip
+      console.log('Multi-turn final: ' + result.response.substring(0, 80))
+      if (activeWs) activeWs.send(JSON.stringify({ type: 'CHIP_RESOLVED', caseId, chip: selectedChip }))
+    } else {
+      console.log('No chip selected in 60s — marking REVIEW')
+      if (activeWs) activeWs.send(JSON.stringify({ type: 'CHIP_TIMEOUT', caseId }))
+    }
+  }
+
   const verdict = runVerdict({
     question, response: result.response, chips: result.chips,
     hasCTA: result.hasCTA, ctaLabels: result.ctaLabels, ctaLinks: result.ctaLinks,
     isHinglish: result.isHinglish, module, expectedBehaviour,
   })
 
-  // ── LLM VERDICT (Ollama Mistral 7B) ─────────────
+  // ── LLM VERDICT (Ollama Llama 3.1 8B) ────────────
   // Runs in parallel — never blocks test run
   const llmResult = await Promise.race([
     runLLMVerdict({ question, expectedBehaviour, botResponse: result.response, module }),
@@ -603,7 +656,7 @@ async function startMessageObserver() {
 // All incoming WS messages go through here.
 // Lock-requiring operations acquire the lock; others run freely.
 async function handleMessage(msg, ws) {
-  const lockRequired = ['RUN_CASE','DIRECT_SEND','CLICK_CHIP','BULK_RUN']
+  const lockRequired = ['RUN_CASE','DIRECT_SEND','CLICK_CHIP','BULK_RUN']  // CHIP_SELECTED handled outside lock
 
   if (lockRequired.includes(msg.type)) {
     if (botLock) { enqueue(msg, ws); return }
@@ -683,6 +736,17 @@ async function handleMessage(msg, ws) {
   else if (msg.type === 'CLEAR_RUN_STATE') {
     clearRunState()
     console.log('🗑️  Run state cleared')
+  }
+  else if (msg.type === 'CHIP_SELECTED') {
+    // User clicked a chip in the inline multi-turn panel
+    if (pendingChipResolve) {
+      console.log('🖱️  Chip selected by user: ' + msg.chip)
+      const resolve = pendingChipResolve
+      pendingChipResolve = null
+      resolve(msg.chip)
+    } else {
+      console.log('⚠️  CHIP_SELECTED but no pending resolve — ignored')
+    }
   }
   else if (msg.type === 'PARITY_CHECK') {
     if (parityBusy) {

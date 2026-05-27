@@ -1245,10 +1245,12 @@ function exportResults(){
 
 // ── WEBSOCKET ──
 function sendToPlaywright(msg){
-  if(!playwrightWS||playwrightWS.readyState!==WebSocket.OPEN)connectWS()
-  const send=()=>{try{playwrightWS.send(JSON.stringify(msg))}catch{}}
-  if(playwrightWS&&playwrightWS.readyState===WebSocket.OPEN)send()
-  else if(playwrightWS)playwrightWS.addEventListener('open',send,{once:true})
+  if(!playwrightWS||playwrightWS.readyState===WebSocket.CLOSED||playwrightWS.readyState===WebSocket.CLOSING){
+    connectWS()
+  }
+  const send=()=>{try{playwrightWS.send(JSON.stringify(msg))}catch(e){console.error('WS send error:',e)}}
+  if(playwrightWS.readyState===WebSocket.OPEN) send()
+  else playwrightWS.addEventListener('open',send,{once:true})
 }
 function connectWS(){
   try{
@@ -1292,10 +1294,21 @@ function connectWS(){
         else if(msg.type==='RUN_STATE'){onRunState(msg.state)}
         else if(msg.type==='PARITY_RESULT'){onParityResult(msg)}
         else if(msg.type==='AWAIT_CHIP'){
-          // Store for rendering after RESPONSE message processes
-          _pendingChip=msg
-          // Also try rendering now in case RESPONSE already came
-          setTimeout(()=>{if(_pendingChip)onAwaitChip(_pendingChip)},800)
+          // Server is waiting for chip selection — RESPONSE won't arrive until chip is picked
+          // Show overlay immediately, with retries to ensure it stays visible
+          const chipMsg=msg
+          function showChipOverlay(){
+            document.getElementById('float-mtchips-'+chipMsg.caseId)?.remove()
+            onAwaitChip(chipMsg)
+            console.log('WS AWAIT_CHIP: overlay shown for case',chipMsg.caseId,'chips:',chipMsg.chips)
+          }
+          showChipOverlay()
+          // Retry after 1s and 2s in case something removes it
+          setTimeout(showChipOverlay,1000)
+          setTimeout(()=>{
+            if(document.getElementById('float-mtchips-'+chipMsg.caseId))return
+            showChipOverlay()
+          },2000)
         }
         else if(msg.type==='CHIP_RESOLVED'){onChipResolved(msg)}
         else if(msg.type==='CHIP_TIMEOUT'){onChipTimeout(msg)}
@@ -1333,6 +1346,8 @@ function submitReauthOTP(){
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 document.getElementById('otpInput').addEventListener('keydown',e=>{if(e.key==='Enter')otpAction()})
 document.getElementById('mobileInput').addEventListener('keydown',e=>{if(e.key==='Enter')otpAction()})
+// Auto-connect WS on page load so onmessage is always attached
+connectWS()
 function autoGrow(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px'}
 </script>
 </body>

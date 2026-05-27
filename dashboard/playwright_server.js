@@ -349,10 +349,9 @@ async function getNewBotResponses(countBefore) {
         return ps.length ? ps : [bubble.innerText.trim()]
       }).filter(Boolean)
       const text = texts.join('\n\n')
-      const chipEls = Array.from(document.querySelectorAll(
-        'button.overlap:not([disabled]), div[class*="chip"] button, div[class*="quick"] button'
-      )).filter(el => el.offsetParent !== null)
-      const chips = chipEls.map(el => el.innerText.trim()).filter(Boolean).slice(0, 10)
+      const quickChips = Array.from(document.querySelectorAll('button.overlap:not([disabled])')).filter(el=>el.offsetParent!==null).map(el=>el.innerText.trim()).filter(Boolean)
+      const relCards   = Array.from(document.querySelectorAll('.blu-relationshipcard__title')).filter(el=>el.offsetParent!==null).map(el=>el.innerText.trim()).filter(Boolean)
+      const chips = [...new Set([...quickChips,...relCards])].slice(0,10)
       const ctaEls = newBubbles.flatMap(b =>
         Array.from(b.querySelectorAll('a, button[class*="cta"], div[class*="cta"], [onclick*="bajaj"], [href]'))
       )
@@ -488,9 +487,12 @@ async function sendMessage(question, caseId = null, expectedBehaviour = '', modu
         document.querySelectorAll('div.blu-bot-message').length
       ).catch(() => 0)
       await page.evaluate((text) => {
-        const btn = Array.from(document.querySelectorAll('button.overlap:not([disabled])'))
-          .find(b => b.innerText.trim() === text)
-        if (btn) btn.click()
+        let el = Array.from(document.querySelectorAll('button.overlap:not([disabled])')).find(b=>b.innerText.trim()===text)
+        if (!el) {
+          const t = Array.from(document.querySelectorAll('.blu-relationshipcard__title')).find(b=>b.innerText.trim()===text)
+          el = t?.closest('.blu-relationshipcard') || t?.parentElement || t
+        }
+        if (el) el.click()
       }, selectedChip)
       await waitForBotToSettle(chipCountBefore)
       const chipResult = await getNewBotResponses(chipCountBefore)
@@ -587,9 +589,12 @@ async function clickChip(chipText, caseId = null) {
       document.querySelectorAll('div.blu-bot-message').length
     ).catch(() => 0)
     const clicked = await page.evaluate((text) => {
-      const btns = Array.from(document.querySelectorAll('button.overlap:not([disabled])'))
-      const btn  = btns.find(b => b.innerText.trim() === text)
-      if (btn) { btn.click(); return true }
+      let el = Array.from(document.querySelectorAll('button.overlap:not([disabled])')).find(b=>b.innerText.trim()===text)
+      if (!el) {
+        const t = Array.from(document.querySelectorAll('.blu-relationshipcard__title')).find(b=>b.innerText.trim()===text)
+        el = t?.closest('.blu-relationshipcard') || t?.parentElement || t
+      }
+      if (el) { el.click(); return true }
       return false
     }, chipText)
     if (clicked) {

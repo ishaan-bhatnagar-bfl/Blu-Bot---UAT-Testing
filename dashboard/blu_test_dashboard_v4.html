@@ -797,6 +797,9 @@ function onLoginOK(restored){
   sessionActive=true;document.getElementById('sessionBanner').classList.add('show')
   document.getElementById('sessionText').textContent=`Session active — ${currentEnv}${restored?' · restored':''}`
   document.getElementById('loginBtn').style.display='none';document.getElementById('bulkBtn').disabled=false;renderList()
+  // Clear any stale chip overlays from previous session
+  document.querySelectorAll('[id^="float-mtchips-"]').forEach(el=>el.remove())
+  Object.keys(_mtTimers).forEach(id=>{clearInterval(_mtTimers[id]);delete _mtTimers[id]})
   // Check for previous incomplete run
   setTimeout(()=>sendToPlaywright({type:'GET_RUN_STATE'}),500)
 }

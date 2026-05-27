@@ -459,6 +459,25 @@ async function sendMessage(question, caseId = null, expectedBehaviour = '', modu
 
   const result  = await getNewBotResponses(countBefore)
 
+  // If response is a loading state, wait for the real response
+  const LOADING_PAT = /working on it|hold on|please wait|kindly wait|checking|fetching/i
+  if (LOADING_PAT.test(result.response)) {
+    console.log('⏳ Loading response detected — waiting for real response...')
+    await page.waitForTimeout(4000)
+    const realResult = await getNewBotResponses(countBefore)
+    if (realResult.response && !LOADING_PAT.test(realResult.response)) {
+      result.response    = realResult.response
+      result.chips       = realResult.chips
+      result.hasCTA      = realResult.hasCTA
+      result.ctaLabels   = realResult.ctaLabels
+      result.ctaLinks    = realResult.ctaLinks
+      result.isHinglish  = realResult.isHinglish
+      result.bubbleCount = realResult.bubbleCount
+      result.elapsed     = realResult.elapsed
+      console.log('✅ Real response captured: ' + result.response.substring(0,60))
+    }
+  }
+
   // Multi-turn: detect disambiguation, wait up to 60s for chip selection
   const DISAMBIG_PAT = [
     /please select the relation to move further/i,

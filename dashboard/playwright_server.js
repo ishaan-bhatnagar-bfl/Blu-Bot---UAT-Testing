@@ -16,7 +16,22 @@ const PORT = 3001
 let MOBILE = '9953333141'
 let STORED_OTP = ''  // stored for re-auth after reset
 const SCREENSHOTS_DIR = path.join(__dirname, '..', 'automation', 'test-output', 'screenshots')
-const LOG_PATH        = path.join(__dirname, '..', 'automation', 'test-output', 'session_log.json')
+// Session log: rotate per session, keep last 5
+const LOG_DIR      = path.join(__dirname, '..', 'automation', 'test-output')
+const LOG_PATH     = path.join(LOG_DIR, `session_log_${new Date().toISOString().slice(0,10)}_${Date.now()}.json`)
+
+function rotateSessionLogs() {
+  try {
+    const files = fs.readdirSync(LOG_DIR)
+      .filter(f => f.startsWith('session_log_') && f.endsWith('.json'))
+      .map(f => ({ f, t: fs.statSync(path.join(LOG_DIR, f)).mtimeMs }))
+      .sort((a, b) => b.t - a.t)
+    files.slice(5).forEach(({ f }) => {
+      try { fs.unlinkSync(path.join(LOG_DIR, f)) } catch {}
+    })
+  } catch {}
+}
+rotateSessionLogs()
 const RUN_STATE_PATH  = path.join(__dirname, '..', 'automation', 'test-output', '.run_state.json')
 
 function writeRunState(state) {

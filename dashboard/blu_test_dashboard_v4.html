@@ -480,6 +480,7 @@ input,textarea{font-family:var(--font)}
         <button class="fpill" onclick="setFilter('Paraphrase',this)">Paraphrase</button>
         <button class="fpill" onclick="setFilter('Untested',this)">Untested</button>
         <button class="fpill fail-pill" onclick="setFilter('Failed',this)">Failed</button>
+        <button class="fpill" id="untestedFirstBtn" onclick="toggleUntestedFirst()" title="Sort untested cases to top">⏭ First</button>
       </div>
       <div class="search-wrap">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -487,7 +488,6 @@ input,textarea{font-family:var(--font)}
       </div>
       <div class="tb-right">
         <span class="count-label">Showing <b id="showCount">0</b></span>
-        <button class="tb-btn icon" id="untestedFirstBtn" onclick="toggleUntestedFirst()" title="Untested first — puts untested cases at top of list" style="font-size:11px;padding:4px 10px;border-color:var(--border-md);color:var(--text-tertiary)">⏭ Untested first</button>
         <button class="bulk-btn" id="bulkBtn" onclick="bulkRun()" disabled>⚡ Bulk Run</button>
       </div>
     </div>
@@ -799,11 +799,24 @@ function rowHTML(c, i){
         ${resp?`
         <div class="resp-section-title">Bot Response</div>
         <div class="resp-text" id="resp-${c.id}">${esc(resp)}</div>
-        ${c['Expected Behaviour']?`<div class="diff-grid">
-          <div class="diff-col diff-expected"><div class="diff-col-label">Expected</div>${esc(c['Expected Behaviour'])}</div>
-          <div class="diff-col diff-actual"><div class="diff-col-label">Actual</div>${esc(resp)}</div>
-        </div>`:''}
-        ${v?`<div class="resp-section-title" style="margin-top:14px">Verdict Breakdown</div>${verdictRulesHTML(v)}`:''}        <div class="resp-meta" id="meta-${c.id}"></div>
+        ${c['Expected Behaviour']?`
+        <details style="margin-top:10px">
+          <summary style="font-size:11px;font-weight:600;color:var(--text-tertiary);cursor:pointer;user-select:none;padding:4px 0;list-style:none;display:flex;align-items:center;gap:6px;outline:none">
+            <span style="font-size:9px">▶</span> Expected vs Actual
+          </summary>
+          <div class="diff-grid" style="margin-top:8px">
+            <div class="diff-col diff-expected"><div class="diff-col-label">Expected</div>${esc(c['Expected Behaviour'])}</div>
+            <div class="diff-col diff-actual"><div class="diff-col-label">Actual</div>${esc(resp)}</div>
+          </div>
+        </details>`:''}
+        ${v?`
+        <details style="margin-top:10px">
+          <summary style="font-size:11px;font-weight:600;color:var(--text-tertiary);cursor:pointer;user-select:none;padding:4px 0;list-style:none;display:flex;align-items:center;gap:6px;outline:none">
+            <span style="font-size:9px">▶</span> Verdict Breakdown
+          </summary>
+          <div style="margin-top:8px">${verdictRulesHTML(v)}</div>
+        </details>`:''}
+        <div class="resp-meta" id="meta-${c.id}"></div>
         <div class="cta-chips-row" id="ctachips-${c.id}"></div>
         <div class="inline-chip-section" id="mtchips-${c.id}"></div>
         <button class="parity-btn ${resp?'show':''}" id="paritybtn-${c.id}"

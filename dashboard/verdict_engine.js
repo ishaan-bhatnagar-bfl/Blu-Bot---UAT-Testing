@@ -244,10 +244,17 @@ function ruleEscalationCorrectness({ response, expectedBehaviour }) {
 }
 
 // ── KEYWORD SCORE (existing auto-score, kept as a rule) ───────────────────────
-function ruleKeywordMatch({ response, expectedBehaviour }) {
+function ruleKeywordMatch({ response, expectedBehaviour, question }) {
   const ruleName = 'KEYWORD_MATCH'
   if (!response || !expectedBehaviour) {
     return { rule: ruleName, status: 'REVIEW', reason: 'No expected behaviour to match against', confidence: 0 }
+  }
+
+  // Short Hinglish queries (<5 meaningful tokens) — semantic scoring unreliable
+  // Return REVIEW so LLM makes the call
+  const qTokens = (question||'').toLowerCase().replace(/[^\w\s]/g,' ').split(/\s+/).filter(w=>w.length>2)
+  if (qTokens.length < 5) {
+    return { rule: ruleName, status: 'REVIEW', reason: `Short query (${qTokens.length} tokens) — LLM verdict preferred`, confidence: 50 }
   }
 
   // Use semantic TF-IDF scoring if available, fall back to keyword overlap

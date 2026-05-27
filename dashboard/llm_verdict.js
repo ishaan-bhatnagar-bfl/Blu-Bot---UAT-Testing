@@ -171,11 +171,14 @@ function hybridVerdict(keywordVerdict, llmResult) {
 
   const kw  = keywordVerdict.verdict
   const llm = llmResult.verdict
+  const conf = llmResult.confidence || 0
 
   if (kw === 'SOURCING_SKIP') return 'SOURCING_SKIP'  // always respected
   if (kw === llm) return kw                             // agreement
   if (llm === 'FAIL') return 'FAIL'                     // LLM says fail → fail
-  if (llm === 'PASS' && kw === 'FAIL') return 'REVIEW'  // disagreement → review
+  // LLM says PASS with high confidence → trust LLM over keyword
+  if (llm === 'PASS' && kw === 'FAIL' && conf >= 80) return 'PASS'
+  if (llm === 'PASS' && kw === 'FAIL') return 'REVIEW'  // low confidence → review
   return 'REVIEW'                                        // any other disagreement
 }
 

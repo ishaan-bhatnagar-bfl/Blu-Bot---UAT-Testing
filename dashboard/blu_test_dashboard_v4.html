@@ -75,6 +75,21 @@ input,textarea{font-family:var(--font)}
 .mod-name{font-size:12px;color:var(--text-secondary)}
 .mod-row.active .mod-name{color:var(--text-primary);font-weight:500}
 .mod-badge{font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;background:var(--bg-active);color:var(--text-tertiary);font-variant-numeric:tabular-nums}
+.mod-diff-badge{font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:var(--amber-dim);color:var(--amber);border:1px solid rgba(245,158,11,0.3);cursor:pointer;flex-shrink:0;margin-left:4px}
+.mod-diff-badge:hover{opacity:0.8}
+/* KB DIFF MODAL */
+.kbdiff-modal{width:580px}
+.kbdiff-tabs{display:flex;gap:2px;padding:10px 18px 0;border-bottom:1px solid var(--border)}
+.kbdiff-tab{font-size:12px;font-weight:500;padding:6px 14px;border-radius:var(--radius-sm) var(--radius-sm) 0 0;border:1px solid transparent;cursor:pointer;color:var(--text-tertiary);background:transparent;transition:all var(--transition)}
+.kbdiff-tab.active{background:var(--bg-surface);color:var(--text-primary);border-color:var(--border-md);border-bottom-color:var(--bg-surface);font-weight:600}
+.kbdiff-body{padding:12px 18px 16px;max-height:55vh;overflow-y:auto}
+.kbdiff-row{padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:6px;font-size:11px}
+.kbdiff-row.added{border-left:3px solid var(--green);background:var(--green-dim)}
+.kbdiff-row.removed{border-left:3px solid var(--amber);background:var(--amber-dim)}
+.kbdiff-l3{font-weight:600;color:var(--text-primary);margin-bottom:2px}
+.kbdiff-q{color:var(--text-secondary);line-height:1.4}
+.kbdiff-meta{font-size:9px;color:var(--text-tertiary);margin-top:3px;font-family:var(--font-mono)}
+.kbdiff-empty{padding:24px;text-align:center;color:var(--text-tertiary);font-size:12px}
 .mod-row.active .mod-badge{background:var(--accent-dim);color:var(--accent)}
 .mod-progress{padding:1px 14px 5px;display:flex;align-items:center;gap:8px}
 .prog-track{flex:1;height:2px;background:var(--bg-active);border-radius:1px;overflow:hidden}
@@ -314,6 +329,24 @@ input,textarea{font-family:var(--font)}
 </head>
 <body>
 
+<!-- KB Diff Modal -->
+<div class="overlay" id="kbDiffOverlay">
+  <div class="modal-card kbdiff-modal wide">
+    <div class="modal-header">
+      <span class="modal-title">📊 KB Diff — May 07 → May 22</span>
+      <span class="modal-x" onclick="closeKbDiff()">×</span>
+    </div>
+    <div class="kbdiff-tabs">
+      <button class="kbdiff-tab active" id="kbdiffTab-added" onclick="switchKbDiffTab('added')">🟢 In May 22, not in May 07 <span id="kbdiffCount-added"></span></button>
+      <button class="kbdiff-tab" id="kbdiffTab-removed" onclick="switchKbDiffTab('removed')">🟡 In May 07, not in May 22 <span id="kbdiffCount-removed"></span></button>
+    </div>
+    <div class="kbdiff-body" id="kbDiffBody"></div>
+    <div class="modal-footer">
+      <button class="mf-btn cancel" onclick="closeKbDiff()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- OTP Modal -->
 <div class="overlay" id="otpOverlay">
   <div class="modal-card">
@@ -395,6 +428,8 @@ input,textarea{font-family:var(--font)}
       <button class="tb-btn icon" onclick="toggleLog()" title="Session log" aria-label="Toggle session log"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button>
       <button class="tb-btn icon" onclick="toggleTheme()" id="themeBtn" title="Toggle theme" aria-label="Toggle theme"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button>
       <button class="tb-btn" onclick="exportResults()" aria-label="Export results as CSV">Export CSV</button>
+      <button class="tb-btn" onclick="document.getElementById('kbDiffFile').click()" title="Load KB diff CSVs to see what changed between KB versions">KB Diff</button>
+      <input type="file" id="kbDiffFile" accept=".csv" multiple onchange="loadKbDiff(event)" style="display:none">
       <button class="tb-btn" onclick="document.getElementById('csvFile').click()">Load CSV</button>
       <input type="file" id="csvFile" accept=".csv" onchange="loadCSV(event)" style="display:none">
       <button class="tb-btn success" id="loginBtn" onclick="initiateLogin()">Connect to Bot</button>
@@ -546,6 +581,8 @@ input,textarea{font-family:var(--font)}
 
 <script>
 let allCases=[],filteredCases=[],results={},responses={},verdicts={},screenshots={},ctaData={},testedAt={}
+let kbDiffData={added:[],removed:[]}  // loaded from gaps CSVs
+let kbDiffTab='added'
 let activeMaster='Service',activeModule='All',activeType='All'
 let sessionActive=false,currentEnv='N2P',isDark=true
 let playwrightWS=null,currentChatId=null,currentBugId=null,logOpen=false
@@ -661,12 +698,19 @@ function buildSidebar(){
         const c=allCases.find(x=>x.id==id);return c&&c['Module']===m
       }).length
       const _rc=tested===0?'var(--border-md)':pct<50?'var(--red)':pct<75?'var(--amber)':pct<90?'var(--accent)':'var(--green)'
+      // FIX #17: blocked modules show ⛔ badge instead of grey ring
+      const isBlocked=BLOCKED_MODULES.has(m)
+      const blockedBadge=isBlocked?`<span style="font-size:10px;margin-left:2px" title="Blocked — chatbot-flag=yes missing in KB">⛔</span>`:''
+      const diffMk=m.replace(/_Service$/,'').replace(/_/g,' ').toLowerCase()
+      const diffCount=(kbDiffData.added.filter(r=>(r['module']||'').toLowerCase()===diffMk).length)+(kbDiffData.removed.filter(r=>(r['module']||'').toLowerCase()===diffMk).length)
+      const diffBadge=diffCount>0?`<span class="mod-diff-badge" onclick="event.stopPropagation();setModule('${m}');openKbDiff()" title="${diffCount} KB changes since last version">Δ${diffCount}</span>`:''
       h+=`<div class="mod-row ${activeModule===m?'active':''}" onclick="setModule('${m}')">
         <div class="mod-ring"><svg width="18" height="18" viewBox="0 0 20 20">
           <circle class="mod-ring-bg" cx="10" cy="10" r="7"/>
-          <circle class="mod-ring-fill" cx="10" cy="10" r="7" stroke="${_rc}" stroke-dasharray="${_circ.toFixed(1)}" stroke-dashoffset="${_off.toFixed(1)}"/>
+          <circle class="mod-ring-fill" cx="10" cy="10" r="7" stroke="${isBlocked?'var(--red-border)':_rc}" stroke-dasharray="${_circ.toFixed(1)}" stroke-dashoffset="${isBlocked?_circ.toFixed(1):_off.toFixed(1)}" stroke-dasharray="${_circ.toFixed(1)}"/>
         </svg></div>
-        <span class="mod-name" style="flex:1">${m.replace(/_Service$/,'').replace(/_/g,' ')}</span>
+        <span class="mod-name" style="flex:1${isBlocked?';opacity:0.55':''}">${m.replace(/_Service$/,'').replace(/_/g,' ')}${blockedBadge}</span>
+        ${diffBadge}
         <span class="mod-badge">${counts[m]}</span>
       </div>`
     }
@@ -710,7 +754,16 @@ function applyFilters(){
   renderList()
 }
 
-// ── VERDICT BADGE ──
+// ── BLOCKED MODULES ──────────────────────────────────────────────────────────
+// Modules with zero coverage due to missing chatbot-flag=yes in KB JSONs
+const BLOCKED_MODULES = new Set([
+  'SME_Flexi_Loan_Service','Flexi_Loan_SME_Service',
+  'Home_Loan_Service',
+  'Loan_Payments_Service',
+  'Rewards_Service',
+  'Help_Support',
+])
+
 function verdictBadge(id){
   const v=verdicts[id],mr=results[id]
   if(mr==='pass')return `<span class="score-tag score-pass">✓ Pass</span>`
@@ -1346,6 +1399,92 @@ function exportResults(){
   a.click()
 }
 
+// ── KB DIFF ──────────────────────────────────────────────────────────────────
+function loadKbDiff(e){
+  const files=Array.from(e.target.files)
+  if(!files.length)return
+  kbDiffData={added:[],removed:[]}
+  let loaded=0
+  files.forEach(file=>{
+    const r=new FileReader()
+    r.onload=ev=>{
+      const rows=parseKbDiffCSV(ev.target.result)
+      // Detect which file: gaps_json_not_in_excel = added to May22; gaps_excel_not_in_json = removed from May22
+      if(file.name.includes('json_not_in_excel'))kbDiffData.added.push(...rows)
+      else if(file.name.includes('excel_not_in_json'))kbDiffData.removed.push(...rows)
+      else kbDiffData.added.push(...rows)  // fallback
+      loaded++
+      if(loaded===files.length){
+        e.target.value=''
+        buildSidebar()  // re-render rings with diff badges
+        openKbDiff()
+      }
+    }
+    r.readAsText(file)
+  })
+}
+
+function parseKbDiffCSV(text){
+  const lines=text.split('\n')
+  const hdr=parseCSV(lines[0]).map(h=>h.trim())
+  const rows=[]
+  for(let i=1;i<lines.length;i++){
+    if(!lines[i].trim())continue
+    const vals=parseCSV(lines[i]),row={}
+    hdr.forEach((h,idx)=>{row[h]=(vals[idx]||'').trim()})
+    if(row['module']||row['question'])rows.push(row)
+  }
+  return rows
+}
+
+function openKbDiff(){
+  document.getElementById('kbDiffOverlay').classList.add('open')
+  renderKbDiff()
+}
+
+function closeKbDiff(){
+  document.getElementById('kbDiffOverlay').classList.remove('open')
+}
+
+function switchKbDiffTab(tab){
+  kbDiffTab=tab
+  document.querySelectorAll('.kbdiff-tab').forEach(b=>b.classList.remove('active'))
+  document.getElementById('kbdiffTab-'+tab).classList.add('active')
+  renderKbDiff()
+}
+
+function renderKbDiff(){
+  const rows=kbDiffData[kbDiffTab]||[]
+  const body=document.getElementById('kbDiffBody')
+  document.getElementById('kbdiffCount-added').textContent=`(${kbDiffData.added.length})`
+  document.getElementById('kbdiffCount-removed').textContent=`(${kbDiffData.removed.length})`
+
+  // Filter to active module if one is selected
+  const filtered=activeModule==='All'?rows:rows.filter(r=>{
+    const mod=(r['module']||'').replace(/ /g,'_')
+    return activeModule.toLowerCase().includes(mod.toLowerCase())||mod.toLowerCase().includes(activeModule.replace(/_Service$/,'').toLowerCase())
+  })
+
+  if(!filtered.length){
+    body.innerHTML=`<div class="kbdiff-empty">${rows.length?'No changes for selected module.':'No diff data loaded. Load both gaps CSVs.'}</div>`
+    return
+  }
+
+  const cls=kbDiffTab==='added'?'added':'removed'
+  body.innerHTML=filtered.map(r=>{
+    const mod=r['module']||r['Module']||''
+    const l3=r['l3']||r['L3']||''
+    const q=r['question']||r['Test Question']||''
+    const src=r['source_file']||r['source']||''
+    const flag=r['chatbot_flag']||''
+    return `<div class="kbdiff-row ${cls}">
+      <div class="kbdiff-l3">${esc(l3)}</div>
+      <div class="kbdiff-q">${esc(q)}</div>
+      <div class="kbdiff-meta">${esc(mod)} ${src?'· '+esc(src):''} ${flag?'· chatbot='+esc(flag):''}</div>
+    </div>`
+  }).join('')
+}
+
 // ── WEBSOCKET ──
 function sendToPlaywright(msg){
   if(!playwrightWS||playwrightWS.readyState===WebSocket.CLOSED||playwrightWS.readyState===WebSocket.CLOSING){
@@ -1361,10 +1500,6 @@ function connectWS(){
     playwrightWS.onmessage=e=>{
       try{
         const msg=JSON.parse(e.data)
-        // Debug: log every WS message
-        if(['AWAIT_CHIP','CHIP_RESOLVED','CHIP_TIMEOUT'].includes(msg.type)){
-          console.log('WS MSG RECEIVED:', msg.type, JSON.stringify(msg))
-        }
         if(msg.type==='REQUEST_OTP')onRequestOTP(msg.mobile)
         else if(msg.type==='LOGIN_OK')onLoginOK(msg.sessionRestored)
         else if(msg.type==='RESPONSE')onResponse(msg)
@@ -1403,7 +1538,6 @@ function connectWS(){
             if(chipShown)return  // already selected — don't recreate
             document.getElementById('float-mtchips-'+chipMsg.caseId)?.remove()
             onAwaitChip(chipMsg)
-            console.log('WS AWAIT_CHIP: overlay shown for case',chipMsg.caseId,'chips:',chipMsg.chips)
           }
           showChipOverlay()
           // Single retry after 1s only if not yet shown

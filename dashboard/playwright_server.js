@@ -931,6 +931,7 @@ async function startServer() {
     sessionLog = []
     msgQueue   = []
     botLock    = false
+    rotateSessionLogs()  // enforce keep-last-5 on every new session
     console.log('🔌 Dashboard connected')
 
     ws.on('message', async raw => {

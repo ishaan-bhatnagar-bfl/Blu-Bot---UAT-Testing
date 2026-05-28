@@ -49,7 +49,7 @@ BLU-Automation/
 │   │   └── May 22 - Latest Content/        ← Active KB (84 JSON files)
 │   └── Excels/
 │
-├── logs/                               ← Gitignored — runtime only
+├── logs/                               ← Gitignored — auto-created on first server run
 │   ├── session_log_<date>.json         ← Per-session logs (keep last 5)
 │   ├── .run_state.json                 ← Bulk run resume state
 │   └── screenshots/                    ← Test screenshots

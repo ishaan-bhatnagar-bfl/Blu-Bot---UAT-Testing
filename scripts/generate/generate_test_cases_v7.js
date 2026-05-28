@@ -22,7 +22,7 @@ const fs   = require('fs');
 const path = require('path');
 
 const JSON_DIR  = path.resolve('knowledge_base/JSONs/May 22 - Latest Content');
-const OUTPUT    = path.resolve('automation/test-output/blu_test_cases_v7.csv');
+const OUTPUT    = path.resolve('test-cases/v7/blu_test_cases_v7.csv');
 
 // ── MODULE MAP — complete mapping for all May 22 JSON L1::L2 combos ─────────
 const MODULE_MAP = {

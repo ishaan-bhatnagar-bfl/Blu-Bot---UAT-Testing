@@ -16,8 +16,8 @@
 const fs   = require('fs')
 const path = require('path')
 
-const V7_CSV       = path.join(__dirname, '..', 'automation', 'test-output', 'blu_test_cases_v7.csv')
-const NEGATIVE_CSV = path.join(__dirname, '..', 'automation', 'test-output', 'blu_negative_test_cases.csv')
+const V7_CSV       = path.join(__dirname, '..', '..', 'test-cases', 'v7', 'blu_test_cases_v7.csv')
+const NEGATIVE_CSV = path.join(__dirname, '..', '..', 'test-cases', 'supplementary', 'blu_negative_test_cases.csv')
 const DRY_RUN      = process.argv.includes('--dry-run')
 
 function parseCSVLine(line) {

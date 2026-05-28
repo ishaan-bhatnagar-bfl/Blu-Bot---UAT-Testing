@@ -4,44 +4,60 @@ Automated + manual testing framework for **BLU Bot** (Bajaj Finance AI assistant
 
 ---
 
-## Architecture
+## Repository Structure
 
 ```
 BLU-Automation/
-├── dashboard/
-│   ├── blu_test_dashboard_v4.html   ← Main test UI (open in browser)
-│   ├── playwright_server.js         ← WebSocket bridge v3.0 (Node.js)
-│   ├── verdict_engine.js            ← Structured keyword verdict rules
-│   ├── llm_verdict.js               ← LLM verdict via Ollama Llama 3.1 8B
-│   └── semantic_scorer.js           ← TF-IDF cosine similarity scoring
+│
+├── dashboard/                          ← Runtime files (server + UI)
+│   ├── blu_test_dashboard_v4.html      ← Main test UI (open in browser)
+│   ├── playwright_server.js            ← WebSocket bridge (Node.js)
+│   ├── verdict_engine.js               ← 8-rule structural verdict engine
+│   ├── llm_verdict.js                  ← LLM verdict via Ollama Llama 3.1 8B
+│   ├── semantic_scorer.js              ← TF-IDF cosine similarity scoring
+│   └── package.json                    ← Node dependencies
+│
+├── test-cases/
+│   ├── v7/
+│   │   ├── blu_test_cases_v7.csv           ← Primary (2,351 cases — 2,321 KB + 30 negative)
+│   │   └── blu_test_cases_v7_realistic.csv ← Realistic phrasing variants (generate when needed)
+│   ├── supplementary/
+│   │   ├── blu_negative_test_cases.csv     ← 30 negative cases (cross-product, PII, sourcing)
+│   │   ├── blu_regression_suite.csv        ← 50 critical regression cases
+│   │   ├── blu_edge_cases.csv              ← Stress: typos, Hinglish, truncated
+│   │   ├── blu_multiturn_test_cases.csv    ← Multi-turn flows
+│   │   └── blu_test_cases_v3_paraphrased.csv ← 129K real user utterances
+│   └── gaps/
+│       ├── gaps_excel_not_in_json.csv      ← KB diff: in Excel, not in JSON
+│       └── gaps_json_not_in_excel.csv      ← KB diff: in JSON, not in Excel
 │
 ├── scripts/
-│   ├── aggregate_results.py         ← Post-run HTML + CSV report
-│   ├── kb_update_trigger.py         ← Auto-pipeline on KB update
-│   ├── generate_test_cases_v7.js    ← Test case generator v7.1
-│   ├── extract_questions.sh
-│   ├── paraphrase_generator.sh
-│   ├── edge_case_generator.sh
-│   └── regression_suite.sh
+│   ├── generate/
+│   │   ├── generate_test_cases_v7.js       ← Regenerate V7 from KB JSONs
+│   │   ├── generate_realistic_variants.js  ← Rewrite V7 questions in real-user phrasing
+│   │   └── generate_negative_cases.js      ← Generate cross-product/PII/sourcing test cases
+│   ├── analysis/
+│   │   ├── benchmark_realistic.js          ← Compare pass rates: V7 vs realistic
+│   │   ├── compare_kb.js                   ← Diff two KB versions, output gap CSVs
+│   │   └── aggregate_results.py            ← Post-run HTML + CSV report
+│   └── kb/
+│       └── kb_update_trigger.py            ← Auto-pipeline on KB update
 │
 ├── knowledge_base/
 │   ├── JSONs/
-│   │   ├── May 07 - Latest Content/   ← Previous KB (reference)
-│   │   └── May 22 - Latest Content/   ← Active KB (84 JSON files)
+│   │   ├── May 07 - Latest Content/        ← Previous KB (reference)
+│   │   └── May 22 - Latest Content/        ← Active KB (84 JSON files)
 │   └── Excels/
 │
-├── automation/
-│   ├── test-output/
-│   │   ├── blu_test_cases_v7.csv          ← Primary (2,321 cases, all modules)
-│   │   ├── blu_test_cases_v3_paraphrased.csv  ← Master (129K real user cases)
-│   │   ├── blu_regression_suite.csv       ← 50 critical regression cases
-│   │   ├── blu_edge_cases.csv             ← 4,479 stress/edge cases
-│   │   ├── blu_multiturn_test_cases.csv   ← 66 multi-turn flows
-│   │   ├── .run_state.json                ← Auto-created — bulk run resume state
-│   │   └── reports/                       ← Aggregated run reports
-│   └── playwright.config.js
+├── logs/                               ← Gitignored — runtime only
+│   ├── session_log_<date>.json         ← Per-session logs (keep last 5)
+│   ├── .run_state.json                 ← Bulk run resume state
+│   └── screenshots/                    ← Test screenshots
 │
-└── data/                             ← Gitignored — obtain from Ishaan
+├── data/                               ← Gitignored — obtain from Ishaan
+├── run_config.json.example
+├── .gitignore
+└── README.md
 ```
 
 ---
@@ -81,7 +97,16 @@ echo 'FROM /Users/<your-username>/Desktop/llama3.1-8b-q4.gguf' > ~/Desktop/Model
 ollama create llama3.1-local -f ~/Desktop/Modelfile
 ```
 
-### 4. Start services (3 terminals)
+### 4. Generate test cases (first-time setup)
+```bash
+# Generate V7 from KB JSONs
+node scripts/generate/generate_test_cases_v7.js
+
+# Append negative test cases
+node scripts/generate/generate_negative_cases.js
+```
+
+### 5. Start services (3 terminals)
 
 **Terminal 1 — Ollama (optional, for LLM scoring):**
 ```bash
@@ -104,10 +129,10 @@ Expected output:
 open dashboard/blu_test_dashboard_v4.html
 ```
 
-### 5. Connect and test
+### 6. Connect and test
 1. Select env: **N2P** or **UAT**
 2. Click **Connect to Bot** → enter mobile → OTP
-3. Load test CSV → filter by module → set cases → **⚡ Bulk Run**
+3. Load test CSV → filter by module → **⚡ Bulk Run**
 
 ---
 
@@ -124,44 +149,54 @@ open dashboard/blu_test_dashboard_v4.html
 
 | File | Cases | Use for |
 |------|-------|---------|
-| `blu_test_cases_v7.csv` | 2,321 | Daily runs — all modules, KB-verbatim |
-| `blu_test_cases_v3_paraphrased.csv` | 129K | Full coverage — real user utterances |
-| `blu_regression_suite.csv` | 50 | Post-deploy sanity check |
-| `blu_edge_cases.csv` | 4,479 | Stress: typos, Hinglish, truncated |
-| `blu_multiturn_test_cases.csv` | 66 flows | Multi-turn manual testing |
-
-Both V3 and V7 column formats load correctly — dashboard normalises on load.
+| `test-cases/v7/blu_test_cases_v7.csv` | 2,351 | Daily runs — KB-verbatim + negative cases |
+| `test-cases/v7/blu_test_cases_v7_realistic.csv` | 2,321 | Realistic phrasing benchmark |
+| `test-cases/supplementary/blu_negative_test_cases.csv` | 30 | Cross-product, PII, sourcing guard tests |
+| `test-cases/supplementary/blu_regression_suite.csv` | 50 | Post-deploy sanity check |
+| `test-cases/supplementary/blu_edge_cases.csv` | 4,479 | Stress: typos, Hinglish, truncated |
+| `test-cases/supplementary/blu_multiturn_test_cases.csv` | 66 flows | Multi-turn manual testing |
+| `test-cases/supplementary/blu_test_cases_v3_paraphrased.csv` | 129K | Full coverage — real user utterances |
 
 ---
 
 ## Dashboard Features
 
+### Filter Pills
+- **In-KB** — KB-verbatim cases only
+- **Gap** — cases with no KB entry (auto-REVIEW)
+- **⚠ Negative** — cross-product, PII, sourcing guard cases
+- **Untested** — cases not yet run
+- **Failed** — cases with FAIL verdict
+- **⏭ First** — sorts untested cases to top
+
 ### Bulk Run
 - **⚡ Bulk Run** → prompts for number of cases → runs in order
-- **⏭ Untested first** toggle → sorts untested cases to top (use for next-day resume)
-- **■ Stop** button in progress bar → cancels run immediately
+- **■ Stop** button → cancels run immediately
 - Progress bar shows live: cases done / total, PASS ✓ / FAIL ✗ / REVIEW ~ counts
 
 ### Bulk Run Resume
 If a bulk run is interrupted, `.run_state.json` is written after every case.
 Next session, on login an accent banner appears:
 ```
-⏮ Last run: 45/112 cases on 27 May 11:23 AM (last: TC_00045)  [Resume]  [Dismiss]
+⏮ Last run: EMI Card · Block related — 45/112 (27 May 11:23 AM)  [Resume]  [Dismiss]
 ```
-Click **Resume** → Untested First activates → list re-sorts → bulk run continues from TC_00046.
 
 ### UAT Parity Check
-After running any test case, a **⚖ Check on UAT** button appears in the response panel.
-Click it → server sends same question to UAT → compares verdict:
-- 🟢 N2P = UAT — results match
-- 🔴 N2P ≠ UAT — mismatch flagged, both responses shown
+After running any case, **⚖ Check on UAT** compares N2P vs UAT verdict.
 
-### Direct Input
-- Auto-grow textarea — expands up to 4 lines as you type
-- `Enter` to send, `Shift+Enter` for newline
+### KB Diff
+Click **KB Diff** in topbar → load both gap CSVs → see what changed between KB versions.
+Modules with changes show a **Δn** amber badge in the sidebar.
 
-### CTA Deep Links
-CTA buttons in response panel show as green chips. Click to copy the `bajajsuperapp://` deep link to clipboard for manual verification.
+### Coverage Rings
+| Colour | Meaning |
+|--------|---------|
+| ⬜ Grey | Not tested yet |
+| 🔴 Red | <50% PASS rate |
+| 🟡 Amber | 50–74% PASS rate |
+| 🔵 Blue | 75–89% PASS rate |
+| 🟢 Green | ≥90% PASS rate |
+| ⛔ | Blocked — `chatbot-flag=yes` missing in KB |
 
 ---
 
@@ -180,67 +215,70 @@ Every bot response is scored by three layers:
 | `CTA_PRESENT` | CTA detected when KB expects one |
 | `NO_CROSS_PRODUCT` | No unrelated product mentions |
 | `ESCALATION_CHECK` | Escalation behaviour matches KB |
-| `KEYWORD_MATCH` | Semantic similarity via TF-IDF (see Layer 2) |
+| `KEYWORD_MATCH` | Semantic similarity via TF-IDF (Layer 2) |
 
 ### Layer 2 — Semantic Scoring (`semantic_scorer.js`, ~1ms)
-Replaces simple keyword overlap in `KEYWORD_MATCH`:
-- TF-IDF cosine similarity between KB expected answer and bot response
-- Financial domain stopwords excluded
-- Synonym expansion: drawdown↔withdraw, block↔freeze, relations↔product, etc.
-- Thresholds: >25% = PASS, 10–25% = REVIEW, <10% = FAIL
-- Falls back to keyword overlap if `semantic_scorer.js` unavailable
+TF-IDF cosine similarity with financial domain stopwords and synonym expansion.
+Thresholds: >25% = PASS, 10–25% = REVIEW, <10% = FAIL.
 
 ### Layer 3 — LLM Verdict (`llm_verdict.js`, ~3s)
-Semantic evaluation via Ollama Llama 3.1 8B:
-- Disambiguation responses ("Please select the relation") → REVIEW, no LLM call
-- Sourcing queries → SOURCING_SKIP
-- Hybrid logic: LLM overrides structural verdict on disagreement
-- Silent fallback to structural-only if Ollama not running
-
-**Hybrid rules:**
-- LLM FAIL + keyword PASS → FAIL
-- LLM PASS + keyword FAIL → REVIEW
-- Both agree → that verdict
-
-**Terminal output per test:**
-```
-🤖 Response (1.2s): Your EMI card limit is ₹2.5L...
-🧠 LLM: ✅ PASS (91%) — Response correctly states EMI card limit
-```
+Ollama Llama 3.1 8B Q4_K_M. Silent fallback to structural-only if Ollama not running.
 
 ---
 
 ## Session Behaviour
 
 - **Auto-reset after 30 messages** — bot navigates back to login
-- **Re-auth detection** — server detects login screen, re-authenticates:
-  - UAT: uses `123465` automatically
-  - N2P: shows inline OTP input in dashboard header banner
+- **Re-auth detection** — UAT auto-fills `123465`, N2P shows inline OTP banner
 - **Message queue** — messages during retry countdown are queued, not dropped
-- **Retry card handling** — server waits out countdown, clicks Retry when active
-- **Ollama off** = keyword + semantic scoring only, no forced FAILs
+- **Ollama off** = keyword + semantic scoring only
 
 ---
 
 ## Export CSV
 
 Column order:
-`Module → L3 → Test Question → In-KB or Gap → Bot Response → Manual Result → Expected Behaviour → Verdict → Verdict_Detail → CTA_Labels → CTA_Links → Chat ID`
-
-`Verdict_Detail` contains per-rule breakdown + LLM verdict reason.
-Only tested cases are exported.
+`Module → L3 → Test Question → In-KB or Gap → Bot Response → Manual Result → Expected Behaviour → Verdict → Verdict_Detail → CTA_Labels → CTA_Links → Chat ID → Tested_At`
 
 After export, generate HTML report:
 ```bash
-python3 scripts/aggregate_results.py <exported_results.csv>
-# Output → automation/test-output/reports/report_YYYY-MM-DD.html
+python3 scripts/analysis/aggregate_results.py <exported_results.csv>
+```
+
+---
+
+## Realistic Variant Benchmark
+
+```bash
+# Step 1 — generate realistic variants (~45 min, Ollama required)
+ollama serve
+node scripts/generate/generate_realistic_variants.js
+
+# Step 2 — run V7 baseline in dashboard, export as blu_results_N2P_v7_baseline.csv
+# Step 3 — run realistic CSV in dashboard, export as blu_results_N2P_v7_realistic.csv
+
+# Step 4 — benchmark
+node scripts/analysis/benchmark_realistic.js \
+  test-cases/v7/blu_results_N2P_v7_baseline.csv \
+  test-cases/v7/blu_results_N2P_v7_realistic.csv
+```
+
+---
+
+## When KB Updates
+
+```bash
+python3 scripts/kb/kb_update_trigger.py --new-folder "June 01 - Latest Content"
+node scripts/generate/generate_test_cases_v7.js
+node scripts/generate/generate_negative_cases.js
+node scripts/analysis/compare_kb.js  # regenerate gap CSVs
 ```
 
 ---
 
 ## Reporting Bugs (ADO)
 
-1. Failed case shows 🐛 Bug button — auto-fills failed rule names
+1. Failed case → 🐛 Bug button → auto-fills failed rules + LLM reason
 2. Format: `CAI Team || WEB || [ENV] || [description]`
 3. Click **Export + Copy** → paste into ADO work item
 
@@ -278,15 +316,6 @@ SME Flexi Loan, Home Loan, Loan Payments, Rewards, Help & Support — `chatbot-f
 
 ---
 
-## When KB Updates
-
-```bash
-python3 scripts/kb_update_trigger.py --new-folder "June 01 - Latest Content"
-node scripts/generate_test_cases_v7.js
-```
-
----
-
 ## Roadmap
 
 | Phase | Status | Description |
@@ -295,8 +324,10 @@ node scripts/generate_test_cases_v7.js
 | Phase 2 | ✅ Done | LLM verdict, disambiguation fix |
 | Phase 3 | ✅ Done | Progress bar, active row, CTA chips, export fix |
 | Phase 4 | ✅ Done | Bulk resume, UAT parity, semantic scoring |
-| Phase 4.1 | ✅ Done | Multi-turn automated runner |
-| Content gaps | ⛔ Blocked | Sourcing JSONs + chatbot-flag=yes for 5 modules |
+| P4.1 | ✅ Done | Multi-turn automated runner |
+| Realistic variants | 🔜 Pending | Run benchmark after Ollama generation |
+| UAT parity bulk run | 🔜 Pending | Module-level N2P vs UAT sweep |
+| Content gaps | ⛔ Blocked | chatbot-flag=yes for 5 modules |
 
 ---
 

@@ -15,9 +15,9 @@ const { runLLMVerdict, isOllamaAvailable, hybridVerdict } = require('./llm_verdi
 const PORT = 3001
 let MOBILE = '9953333141'
 let STORED_OTP = ''  // stored for re-auth after reset
-const SCREENSHOTS_DIR = path.join(__dirname, '..', 'automation', 'test-output', 'screenshots')
+const SCREENSHOTS_DIR = path.join(__dirname, '..', 'logs', 'screenshots')
 // Session log: rotate per session, keep last 5
-const LOG_DIR      = path.join(__dirname, '..', 'automation', 'test-output')
+const LOG_DIR      = path.join(__dirname, '..', 'logs')
 const LOG_PATH     = path.join(LOG_DIR, `session_log_${new Date().toISOString().slice(0,10)}_${Date.now()}.json`)
 
 function rotateSessionLogs() {
@@ -32,7 +32,7 @@ function rotateSessionLogs() {
   } catch {}
 }
 rotateSessionLogs()
-const RUN_STATE_PATH  = path.join(__dirname, '..', 'automation', 'test-output', '.run_state.json')
+const RUN_STATE_PATH  = path.join(__dirname, '..', 'logs', '.run_state.json')
 
 function writeRunState(state) {
   try { fs.writeFileSync(RUN_STATE_PATH, JSON.stringify(state, null, 2)) } catch {}

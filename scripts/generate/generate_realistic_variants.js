@@ -26,8 +26,8 @@ const path = require('path')
 const http = require('http')
 
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const INPUT_CSV  = path.join(__dirname, '..', 'test-cases', 'v7', 'blu_test_cases_v7.csv')
-const OUTPUT_CSV = path.join(__dirname, '..', 'test-cases', 'v7', 'blu_test_cases_v7_realistic.csv')
+const INPUT_CSV  = path.join(__dirname, '..', '..', 'test-cases', 'v7', 'blu_test_cases_v7.csv')
+const OUTPUT_CSV = path.join(__dirname, '..', '..', 'test-cases', 'v7', 'blu_test_cases_v7_realistic.csv')
 const OLLAMA_MODEL   = 'llama3.1-local'
 const OLLAMA_HOST    = 'localhost'
 const OLLAMA_PORT    = 11434

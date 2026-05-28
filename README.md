@@ -310,7 +310,7 @@ SME Flexi Loan, Home Loan, Loan Payments, Rewards, Help & Support — `chatbot-f
 | Phase 2 | ✅ Done | LLM verdict, disambiguation fix |
 | Phase 3 | ✅ Done | Progress bar, active row, CTA chips, export |
 | Phase 4 | ✅ Done | Bulk resume, UAT parity, semantic scoring |
-| P4.1 | ✅ Done | Multi-turn automated runner |
+| Phase 4.1 | ✅ Done | Multi-turn automated runner |
 | Realistic variants | 🔜 Pending | Run benchmark after Ollama generation |
 | UAT parity bulk run | 🔜 Pending | Module-level N2P vs UAT sweep |
 | Content gaps | ⛔ Blocked | chatbot-flag=yes for 5 modules |

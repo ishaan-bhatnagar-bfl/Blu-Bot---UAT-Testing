@@ -8,9 +8,14 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{--radius:8px;--radius-sm:5px;--radius-lg:12px;--transition:150ms cubic-bezier(0.4,0,0.2,1);--font:'DM Sans',system-ui,sans-serif;--font-mono:'DM Mono',monospace}
-[data-theme="dark"]{--bg-base:#0a0a0b;--bg-surface:#111113;--bg-raised:#18181b;--bg-hover:#1f1f24;--bg-active:#27272d;--border:rgba(255,255,255,0.07);--border-md:rgba(255,255,255,0.11);--border-lg:rgba(255,255,255,0.16);--text-primary:#f4f4f5;--text-secondary:#a1a1aa;--text-tertiary:#52525b;--text-quaternary:#3f3f46;--accent:#6366f1;--accent-dim:rgba(99,102,241,0.15);--accent-border:rgba(99,102,241,0.35);--green:#22c55e;--green-dim:rgba(34,197,94,0.12);--green-border:rgba(34,197,94,0.3);--red:#ef4444;--red-dim:rgba(239,68,68,0.12);--red-border:rgba(239,68,68,0.3);--amber:#f59e0b;--amber-dim:rgba(245,158,11,0.12);--cyan:#06b6d4;--cyan-dim:rgba(6,182,212,0.12);--purple:#a855f7;--purple-dim:rgba(168,85,247,0.12);--shadow-sm:0 1px 3px rgba(0,0,0,0.4);--shadow-md:0 4px 12px rgba(0,0,0,0.5);--shadow-lg:0 8px 32px rgba(0,0,0,0.6)}
+[data-theme="dark"]{--bg-base:#0a0a0b;--bg-surface:#111113;--bg-raised:#18181b;--bg-hover:#1f1f24;--bg-active:#27272d;--border:rgba(255,255,255,0.07);--border-md:rgba(255,255,255,0.11);--border-lg:rgba(255,255,255,0.16);--text-primary:#f4f4f5;--text-secondary:#a1a1aa;--text-tertiary:#71717a;--text-quaternary:#52525b;--accent:#6366f1;--accent-dim:rgba(99,102,241,0.15);--accent-border:rgba(99,102,241,0.35);--green:#22c55e;--green-dim:rgba(34,197,94,0.12);--green-border:rgba(34,197,94,0.3);--red:#ef4444;--red-dim:rgba(239,68,68,0.12);--red-border:rgba(239,68,68,0.3);--amber:#f59e0b;--amber-dim:rgba(245,158,11,0.12);--cyan:#06b6d4;--cyan-dim:rgba(6,182,212,0.12);--purple:#a855f7;--purple-dim:rgba(168,85,247,0.12);--shadow-sm:0 1px 3px rgba(0,0,0,0.4);--shadow-md:0 4px 12px rgba(0,0,0,0.5);--shadow-lg:0 8px 32px rgba(0,0,0,0.6)}
 [data-theme="light"]{--bg-base:#fafafa;--bg-surface:#ffffff;--bg-raised:#f4f4f5;--bg-hover:#f0f0f1;--bg-active:#e8e8ea;--border:rgba(0,0,0,0.07);--border-md:rgba(0,0,0,0.11);--border-lg:rgba(0,0,0,0.16);--text-primary:#09090b;--text-secondary:#52525b;--text-tertiary:#a1a1aa;--text-quaternary:#d4d4d8;--accent:#4f46e5;--accent-dim:rgba(79,70,229,0.08);--accent-border:rgba(79,70,229,0.25);--green:#16a34a;--green-dim:rgba(22,163,74,0.08);--green-border:rgba(22,163,74,0.25);--red:#dc2626;--red-dim:rgba(220,38,38,0.08);--red-border:rgba(220,38,38,0.25);--amber:#d97706;--amber-dim:rgba(217,119,6,0.08);--cyan:#0891b2;--cyan-dim:rgba(8,145,178,0.08);--purple:#9333ea;--purple-dim:rgba(147,51,234,0.08);--shadow-sm:0 1px 3px rgba(0,0,0,0.08);--shadow-md:0 4px 12px rgba(0,0,0,0.1);--shadow-lg:0 8px 32px rgba(0,0,0,0.12)}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+/* ACCESSIBILITY */
+:focus-visible{outline:2px solid var(--accent)!important;outline-offset:2px;border-radius:2px}
+button:focus-visible,a:focus-visible,[tabindex="0"]:focus-visible{outline:2px solid var(--accent)!important;outline-offset:2px}
+:focus:not(:focus-visible){outline:none}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 html,body{height:100%;overflow:hidden}
 body{font-family:var(--font);font-size:14px;line-height:1.6;background:var(--bg-base);color:var(--text-primary);transition:background var(--transition),color var(--transition);-webkit-font-smoothing:antialiased}
 button{font-family:var(--font);cursor:pointer}
@@ -319,11 +324,11 @@ input,textarea{font-family:var(--font)}
     <div class="modal-body">
       <div class="field" id="mobileField">
         <div class="field-label">Mobile Number</div>
-        <input class="field-input mobile-input" id="mobileInput" type="tel" maxlength="10" value="9953333141" placeholder="10-digit number">
+        <label for="mobileInput" class="sr-only">Mobile number</label><input class="field-input mobile-input" id="mobileInput" type="tel" maxlength="10" value="9953333141" placeholder="10-digit number">
       </div>
       <div class="field" id="otpField" style="display:none">
         <div class="field-label">6-digit OTP</div>
-        <input class="field-input otp-input" id="otpInput" type="text" maxlength="6" placeholder="————————">
+        <label for="otpInput" class="sr-only">One-time password</label><input class="field-input otp-input" id="otpInput" type="text" maxlength="6" placeholder="6-digit OTP" aria-label="One-time password" inputmode="numeric" autocomplete="one-time-code">
         <div style="font-size:10px;color:var(--text-tertiary);margin-top:5px" id="otpHint"></div>
       </div>
     </div>
@@ -335,7 +340,7 @@ input,textarea{font-family:var(--font)}
 </div>
 
 <!-- Bug Modal -->
-<div class="overlay" id="bugOverlay">
+<div class="overlay" id="bugOverlay" role="dialog" aria-modal="true" aria-labelledby="bugModalHeading" aria-describedby="bugDesc">
   <div class="modal-card wide">
     <div class="modal-header">
       <span class="modal-title">🐛 Report Bug</span>
@@ -387,9 +392,9 @@ input,textarea{font-family:var(--font)}
     </div>
     <div class="msg-counter" id="msgCounter" title="Messages used (resets at 30)">💬 <span id="msgCountEl">0</span>/30</div>
     <div class="tb-actions">
-      <button class="tb-btn icon" onclick="toggleLog()" title="Session log"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button>
-      <button class="tb-btn icon" onclick="toggleTheme()" id="themeBtn" title="Toggle theme"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button>
-      <button class="tb-btn" onclick="exportResults()">Export CSV</button>
+      <button class="tb-btn icon" onclick="toggleLog()" title="Session log" aria-label="Toggle session log"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button>
+      <button class="tb-btn icon" onclick="toggleTheme()" id="themeBtn" title="Toggle theme" aria-label="Toggle theme"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button>
+      <button class="tb-btn" onclick="exportResults()" aria-label="Export results as CSV">Export CSV</button>
       <button class="tb-btn" onclick="document.getElementById('csvFile').click()">Load CSV</button>
       <input type="file" id="csvFile" accept=".csv" onchange="loadCSV(event)" style="display:none">
       <button class="tb-btn success" id="loginBtn" onclick="initiateLogin()">Connect to Bot</button>
@@ -407,6 +412,7 @@ input,textarea{font-family:var(--font)}
     </div>
   </aside>
 
+  <div class="sr-only" id="liveRegion" role="status" aria-live="polite" aria-atomic="true"></div>
   <div class="csv-load-bar" id="csvLoadBar"><div class="csv-load-fill" id="csvLoadFill"></div></div>
   <main class="main">
     <div class="session-banner" id="sessionBanner">
@@ -501,7 +507,7 @@ input,textarea{font-family:var(--font)}
       </div>
       <div class="search-wrap">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input class="search-in" id="searchIn" placeholder="Search test cases…" oninput="applyFilters()">
+        <label for="searchIn" class="sr-only">Search test cases</label><input class="search-in" id="searchIn" aria-label="Search test cases" placeholder="Search test cases…" oninput="applyFilters()">
       </div>
       <div class="tb-right">
         <span class="count-label">Showing <b id="showCount">0</b></span>
@@ -517,7 +523,7 @@ input,textarea{font-family:var(--font)}
     <div class="direct-bar" id="directBar">
       <span class="direct-label">Direct</span>
       <div class="direct-in-wrap">
-        <textarea class="direct-in" id="directIn" rows="1" placeholder="Send any message directly to the bot…" oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDirect()}"></textarea>
+        <label for="directIn" class="sr-only">Direct message</label><textarea class="direct-in" id="directIn" rows="1" placeholder="Send any message directly to the bot…" oninput="autoGrow(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDirect()}"></textarea>
       </div>
       <button class="send-btn" onclick="sendDirect()">Send</button>
       <div class="direct-response" id="directResponse">
@@ -527,7 +533,7 @@ input,textarea{font-family:var(--font)}
       </div>
     </div>
 
-    <div class="test-list" id="testList">
+    <div class="test-list" id="testList" role="region" aria-label="Test cases">
       <div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Load a CSV file to begin testing<br><span style="opacity:.6">Use the Load CSV button in the header</span></div></div>
     </div>
 
@@ -706,9 +712,9 @@ function verdictBadge(id){
   if(mr==='pass')return `<span class="score-tag score-pass">✓ Pass</span>`
   if(mr==='fail')return `<span class="score-tag score-fail">✗ Fail</span>`
   if(!v)return ''
-  if(v.verdict==='PASS')return `<span class="score-tag score-pass">✓ PASS</span>`
-  if(v.verdict==='FAIL')return `<span class="score-tag score-fail">✗ FAIL</span>`
-  if(v.verdict==='REVIEW')return `<span class="score-tag score-review">~ REVIEW</span>`
+  if(v.verdict==='PASS')return `<span class="score-tag score-pass" role="status" aria-label="Verdict: Pass">✓ PASS</span>`
+  if(v.verdict==='FAIL')return `<span class="score-tag score-fail" role="status" aria-label="Verdict: Fail">✗ FAIL</span>`
+  if(v.verdict==='REVIEW')return `<span class="score-tag score-review" role="status" aria-label="Verdict: Review">~ REVIEW</span>`
   if(v.verdict==='SOURCING_SKIP')return `<span class="score-tag score-skip">⊘ SKIP</span>`
   return ''
 }
@@ -810,7 +816,7 @@ function rowHTML(c, i){
   const ss=screenshots[c.id],resp=responses[c.id]||''
   const v=verdicts[c.id]
   return `<div class="test-item">
-      <div class="test-main" id="row-${c.id}" onclick="toggleResp(${c.id})">
+      <div class="test-main" id="row-${c.id}" onclick="toggleResp(${c.id})" tabindex="0" role="button" aria-label="Test case ${c.id}: ${esc(c['Test Question']).substring(0,60)}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleResp(${c.id})}">
         <div class="t-idx">${String(i+1).padStart(3,'0')}</div>
         <div class="t-content">
           <div class="t-tags">${typeTags(c)}${verdictBadge(c.id)}</div>
@@ -836,7 +842,7 @@ function rowHTML(c, i){
         <div class="resp-text" id="resp-${c.id}">${esc(resp)}</div>
         ${c['Expected Behaviour']?`
         <details style="margin-top:10px">
-          <summary style="font-size:11px;font-weight:600;color:var(--text-tertiary);cursor:pointer;user-select:none;padding:4px 0;list-style:none;display:flex;align-items:center;gap:6px;outline:none">
+          <summary style="font-size:11px;font-weight:600;color:var(--text-tertiary);cursor:pointer;user-select:none;padding:4px 0;list-style:none;display:flex;align-items:center;gap:6px">
             <span style="font-size:9px">▶</span> Expected vs Actual
           </summary>
           <div class="diff-grid" style="margin-top:8px">
@@ -846,7 +852,7 @@ function rowHTML(c, i){
         </details>`:''}
         ${v?`
         <details style="margin-top:10px">
-          <summary style="font-size:11px;font-weight:600;color:var(--text-tertiary);cursor:pointer;user-select:none;padding:4px 0;list-style:none;display:flex;align-items:center;gap:6px;outline:none">
+          <summary style="font-size:11px;font-weight:600;color:var(--text-tertiary);cursor:pointer;user-select:none;padding:4px 0;list-style:none;display:flex;align-items:center;gap:6px">
             <span style="font-size:9px">▶</span> Verdict Breakdown
           </summary>
           <div style="margin-top:8px">${verdictRulesHTML(v)}</div>
@@ -865,7 +871,8 @@ function rowHTML(c, i){
 function mark(e,id,res){
   e.stopPropagation();results[id]=res
   document.querySelectorAll(`#row-${id} .bug-btn`).forEach(b=>b.classList.toggle('show',res==='fail'))
-  buildSidebar();updateStats();renderList()
+  buildSidebar();updateStats()
+  if(msg.verdict?.verdict){const lr=document.getElementById('liveRegion');if(lr)lr.textContent='Case '+id+': '+msg.verdict.verdict};renderList()
 }
 
 // ── STATS (now includes SKIP) ──
@@ -1115,7 +1122,7 @@ function openBugModal(e,id){
   document.getElementById('bugChatId').textContent=currentChatId||'Not captured'
   document.getElementById('bugEnvInfo').textContent=`9953333141 / WEB / ${currentEnv}`
   document.getElementById('bugDesc').value=failedRules?`Failed rules:\n${failedRules}`:''
-  updateBugPreview();document.getElementById('bugOverlay').classList.add('open')
+  updateBugPreview();document.getElementById('bugOverlay').classList.add('open');setTimeout(()=>document.getElementById('bugDesc')?.focus(),50)
 }
 function updateBugPreview(){
   const preview=`Steps to Reproduce the Bug:\n${document.getElementById('bugDesc').value||'(add description)'}\n\nActual User Input: ${document.getElementById('bugInput').textContent}\nBot Response: ${document.getElementById('bugBotResp').value}\nExpected Response: ${document.getElementById('bugExpected').value}\nChat ID: ${document.getElementById('bugChatId').textContent}\nMobile Number: 9953333141\nEnvironment: ${currentEnv}\nDevice: WEB`
@@ -1143,9 +1150,9 @@ function addLog({type='test',q='',r='',t='',s=''}){
   el.insertBefore(div,el.firstChild);if(el.children.length>100)el.removeChild(el.lastChild)
 }
 function verdictBadgeStr(s){
-  if(s==='PASS')return `<span class="score-tag score-pass">✓ PASS</span>`
-  if(s==='FAIL')return `<span class="score-tag score-fail">✗ FAIL</span>`
-  if(s==='REVIEW')return `<span class="score-tag score-review">~ REVIEW</span>`
+  if(s==='PASS')return `<span class="score-tag score-pass" role="status" aria-label="Verdict: Pass">✓ PASS</span>`
+  if(s==='FAIL')return `<span class="score-tag score-fail" role="status" aria-label="Verdict: Fail">✗ FAIL</span>`
+  if(s==='REVIEW')return `<span class="score-tag score-review" role="status" aria-label="Verdict: Review">~ REVIEW</span>`
   if(s==='SOURCING_SKIP')return `<span class="score-tag score-skip">⊘ SKIP</span>`
   return ''
 }
@@ -1165,6 +1172,7 @@ function onAwaitChip(msg){
   const section=document.getElementById('mtchips-'+id)
   if(!section)return
   section.classList.add('show');section.innerHTML=''
+  section.setAttribute('role','region');section.setAttribute('aria-label','Select product to continue test');section.setAttribute('aria-live','polite')
   const labelDiv=document.createElement('div');labelDiv.className='inline-chip-label'
   labelDiv.innerHTML='🔀 Select product to continue <span class="inline-chip-countdown" id="mtcount-'+id+'">'+Math.round(timeout/1000)+'s</span>'
   section.appendChild(labelDiv)

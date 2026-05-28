@@ -671,7 +671,7 @@ function parseCSV(line){
   return res
 }
 
-function getCaseType(c){const t=c['Type']||'';if(t)return t;const m=c['Module']||'';if(['BBPS','Bill_Payments','Wallet','UPI','FASTag','Gift_Card'].includes(m))return 'Payments';if(m==='Rewards')return 'Rewards';return 'Service'}
+function getCaseType(c){const t=c['Type']||'';const valid=['Service','Payments','Rewards','Sourcing','Negative'];if(valid.includes(t))return t;const m=c['Module']||'';if(/upi|bbps|wallet|fastag|payment/i.test(m))return 'Payments';if(/reward/i.test(m))return 'Rewards';return 'Service'}
 
 // ── SIDEBAR ──
 function buildSidebar(){

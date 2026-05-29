@@ -8,14 +8,13 @@
  * Why: V7 questions match KB headings exactly → artificially high pass rates.
  * Real users are informal, terse, Hinglish-mixed, and never write like a KB.
  *
- * Output: automation/test-output/blu_test_cases_v7_realistic.csv
- *         Same columns as V7. Source = realistic_v1. In-KB or Gap = In-KB.
+ * Output: test-cases/v7/blu_test_cases_v7_realistic.csv
  *
  * Usage:
- *   node scripts/generate_realistic_variants.js
- *   node scripts/generate_realistic_variants.js --dry-run     # show first 10 without calling LLM
- *   node scripts/generate_realistic_variants.js --module EMI_Card_Service
- *   node scripts/generate_realistic_variants.js --limit 200   # cap total cases
+ *   node scripts/generate/generate_realistic_variants.js
+ *   node scripts/generate/generate_realistic_variants.js --dry-run
+ *   node scripts/generate/generate_realistic_variants.js --module EMI_Card_Service
+ *   node scripts/generate/generate_realistic_variants.js --limit 200
  *
  * Prerequisites:
  *   ollama serve  (llama3.1-local must be registered)
@@ -28,13 +27,13 @@ const http = require('http')
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const INPUT_CSV  = path.join(__dirname, '..', '..', 'test-cases', 'v7', 'blu_test_cases_v7.csv')
 const OUTPUT_CSV = path.join(__dirname, '..', '..', 'test-cases', 'v7', 'blu_test_cases_v7_realistic.csv')
-const OLLAMA_MODEL   = 'llama3.1-local'
-const OLLAMA_HOST    = 'localhost'
-const OLLAMA_PORT    = 11434
-const BATCH_SIZE     = 8    // questions per LLM call (keep prompt tight)
-const TIMEOUT_MS     = 30000
+const OLLAMA_MODEL = 'llama3.1-local'
+const OLLAMA_HOST  = 'localhost'
+const OLLAMA_PORT  = 11434
+const BATCH_SIZE   = 4      // smaller = more reliable JSON output from 8B model
+const TIMEOUT_MS   = 45000  // 45s — generous for slow batches
 
-// ── CLI ARGS ─────────────────────────────────────────────────────────────────
+// ── CLI ARGS ──────────────────────────────────────────────────────────────────
 const args         = process.argv.slice(2)
 const DRY_RUN      = args.includes('--dry-run')
 const moduleFilter = args.includes('--module') ? args[args.indexOf('--module') + 1] : null
@@ -85,9 +84,14 @@ function callOllama(prompt) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
       model:  OLLAMA_MODEL,
-      prompt: `<s>[INST] ${prompt} [/INST]`,
+      prompt,
       stream: false,
-      options: { temperature: 0.7, num_predict: 400, top_p: 0.9 }
+      options: {
+        temperature:  0.6,   // slightly lower = more consistent JSON formatting
+        num_predict:  300,
+        top_p:        0.9,
+        stop:         ['\n\n\n'],  // stop on triple newline — prevents rambling
+      }
     })
     const req = http.request(
       {
@@ -101,7 +105,7 @@ function callOllama(prompt) {
         res.on('data', c => data += c)
         res.on('end', () => {
           try { resolve(JSON.parse(data).response || '') }
-          catch { reject(new Error('Parse failed')) }
+          catch { reject(new Error('Response parse failed')) }
         })
       }
     )
@@ -112,41 +116,84 @@ function callOllama(prompt) {
   })
 }
 
-// ── PROMPT BUILDER ────────────────────────────────────────────────────────────
+// ── PROMPT ────────────────────────────────────────────────────────────────────
+// Tighter prompt — fewer rules, explicit format, few-shot example
 function buildBatchPrompt(l3, module, questions) {
   const qList = questions.map((q, i) => `${i + 1}. ${q}`).join('\n')
-  return `You are rewriting customer service test questions for BLU Bot (Bajaj Finance AI assistant, Indian NBFC).
+  const count = questions.length
 
-Context: Module = ${module}, Topic = ${l3}
+  return `Rewrite these ${count} customer service questions as informal Indian mobile app user messages (Hinglish OK, terse, no formal language). Output ONLY a JSON array of ${count} strings. No markdown, no explanation.
 
-Task: Rewrite each question below into how a REAL Indian mobile app user would actually type it.
-Rules:
-- Be terse, informal, sometimes grammatically incorrect (real users type fast)
-- Mix English with Hindi/Hinglish words occasionally (e.g. "mera EMI", "kab milega", "kya hoga")
-- Remove formal phrases ("Could you please", "I would like to know", "Kindly inform me")
-- Keep the core question intent — do not change what is being asked
-- Each rewrite must be different in phrasing from the original
-- Output ONLY a JSON array of strings, one per question, in the same order
-- No preamble, no explanation, no markdown. Just the JSON array.
+Example input: ["How can I make an advance EMI payment?"]
+Example output: ["advance EMI dena hai kaise"]
 
-Original questions:
+Topic: ${l3} (${module.replace(/_Service$/, '').replace(/_/g, ' ')})
+
 ${qList}
 
-Respond with ONLY a JSON array like: ["rewritten 1","rewritten 2",...]`
+JSON array of ${count} rewrites:`
 }
 
-// ── PARSE LLM BATCH RESPONSE ──────────────────────────────────────────────────
+// ── PARSER — robust, handles 5 common failure modes ──────────────────────────
 function parseBatchResponse(raw, expectedCount) {
-  const match = raw.match(/\[[\s\S]*\]/)
-  if (!match) return null
+  if (!raw || !raw.trim()) return null
+
+  // 1. Strip markdown fences
+  let cleaned = raw
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '')
+    .trim()
+
+  // 2. Try direct JSON parse of full response
   try {
-    const parsed = JSON.parse(match[0])
-    if (!Array.isArray(parsed)) return null
-    while (parsed.length < expectedCount) parsed.push(null)
-    return parsed.slice(0, expectedCount)
-  } catch {
-    return null
+    const parsed = JSON.parse(cleaned)
+    if (Array.isArray(parsed)) return normalise(parsed, expectedCount)
+  } catch {}
+
+  // 3. Extract first [...] block
+  const arrMatch = cleaned.match(/\[[\s\S]*?\]/)
+  if (arrMatch) {
+    try {
+      const parsed = JSON.parse(arrMatch[0])
+      if (Array.isArray(parsed)) return normalise(parsed, expectedCount)
+    } catch {}
   }
+
+  // 4. Single-quoted array — replace ' with " carefully
+  const singleQuote = cleaned.replace(/'/g, '"')
+  const sqMatch = singleQuote.match(/\[[\s\S]*?\]/)
+  if (sqMatch) {
+    try {
+      const parsed = JSON.parse(sqMatch[0])
+      if (Array.isArray(parsed)) return normalise(parsed, expectedCount)
+    } catch {}
+  }
+
+  // 5. Numbered list fallback — "1. question\n2. question"
+  const numbered = cleaned.match(/^\d+\.\s+(.+)$/gm)
+  if (numbered && numbered.length > 0) {
+    const extracted = numbered.map(l => l.replace(/^\d+\.\s+/, '').trim())
+    return normalise(extracted, expectedCount)
+  }
+
+  // 6. Line-by-line fallback — one rewrite per line, ignore empty/meta lines
+  const lines = cleaned.split('\n')
+    .map(l => l.replace(/^[-•*"'\d.)\s]+/, '').replace(/["']$/, '').trim())
+    .filter(l => l.length > 5 && l.length < 300 && !l.startsWith('{') && !l.startsWith('['))
+  if (lines.length > 0) return normalise(lines, expectedCount)
+
+  return null
+}
+
+function normalise(arr, expectedCount) {
+  // Filter out nulls, empties, non-strings
+  const clean = arr
+    .map(v => (typeof v === 'string' ? v.trim() : null))
+    .filter(v => v && v.length > 2)
+  if (clean.length === 0) return null
+  // Pad to expected count with nulls (will fall back to original)
+  while (clean.length < expectedCount) clean.push(null)
+  return clean.slice(0, expectedCount)
 }
 
 // ── GROUP BY L3 ───────────────────────────────────────────────────────────────
@@ -162,10 +209,12 @@ function groupByL3(rows) {
 
 // ── GENERATE ──────────────────────────────────────────────────────────────────
 async function generateVariants(groups) {
-  const outputRows = []
-  let tcCounter    = 1
-  const total      = groups.reduce((s, g) => s + g.rows.length, 0)
-  let done         = 0
+  const outputRows  = []
+  let tcCounter     = 1
+  const total       = groups.reduce((s, g) => s + g.rows.length, 0)
+  let done          = 0
+  let parseOk       = 0
+  let parseFail     = 0
 
   for (const group of groups) {
     const { module, l3, rows } = group
@@ -178,18 +227,20 @@ async function generateVariants(groups) {
         try {
           const raw = await callOllama(buildBatchPrompt(l3, module, questions))
           rewrites  = parseBatchResponse(raw, questions.length)
-          if (!rewrites) console.warn(`  ⚠ Parse failed for ${l3} batch — using originals`)
+          if (rewrites) parseOk++
+          else { parseFail++; process.stdout.write(`\n  ⚠ Parse failed: ${l3} — using originals`) }
         } catch (e) {
-          console.warn(`  ⚠ LLM error for ${l3}: ${e.message} — using originals`)
+          parseFail++
+          process.stdout.write(`\n  ⚠ LLM error: ${e.message}`)
         }
       }
 
       batch.forEach((row, idx) => {
         const rewritten = rewrites?.[idx] || row['Test Question']
-        const tcId      = `RV_${String(tcCounter).padStart(5, '0')}`
+        const isOriginal = !rewrites?.[idx]
         tcCounter++; done++
         outputRows.push({
-          'TC ID':                tcId,
+          'TC ID':                `RV_${String(tcCounter).padStart(5, '0')}`,
           'Module':               row['Module'],
           'L1':                   row['L1'],
           'L2':                   row['L2'],
@@ -200,18 +251,18 @@ async function generateVariants(groups) {
           'Expected Key Phrases': row['Expected Key Phrases'],
           'CTA Expected':         row['CTA Expected'],
           'Type':                 row['Type'] || 'Service',
-          'In-KB or Gap':         'In-KB',
+          'In-KB or Gap':         row['In-KB or Gap'] || 'In-KB',
           'Scoring Type':         'auto',
-          'Source':               'realistic_v1',
+          'Source':               isOriginal ? 'realistic_v1_fallback' : 'realistic_v1',
         })
       })
 
-      process.stdout.write(`\r  Progress: ${done}/${total} (${l3.substring(0,30)})          `)
-      if (!DRY_RUN) await sleep(200)
+      process.stdout.write(`\r  Progress: ${done}/${total} | ✓ ${parseOk} batches rewritten | ✗ ${parseFail} fallback          `)
+      if (!DRY_RUN) await sleep(150)
     }
   }
   console.log('\n')
-  return outputRows
+  return { outputRows, parseOk, parseFail }
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
@@ -232,11 +283,11 @@ function writeCSV(rows) {
 
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log('\n🔄 BLU Bot — Realistic Variant Generator')
+  console.log('\n🔄 BLU Bot — Realistic Variant Generator v2')
   console.log(`   Input:  ${INPUT_CSV}`)
   console.log(`   Output: ${OUTPUT_CSV}`)
-  if (DRY_RUN)      console.log('   Mode:   DRY RUN (no LLM calls — originals used)')
-  if (moduleFilter) console.log(`   Filter: module = ${moduleFilter}`)
+  if (DRY_RUN)      console.log('   Mode:   DRY RUN (no LLM calls)')
+  if (moduleFilter) console.log(`   Filter: ${moduleFilter}`)
   if (limitArg)     console.log(`   Limit:  ${limitArg} cases`)
   console.log('')
 
@@ -244,32 +295,33 @@ async function main() {
   console.log(`✅ Loaded ${allRows.length} cases from V7`)
 
   let rows = allRows.filter(r => {
-    if ((r['In-KB or Gap'] || '').toLowerCase().includes('gap')) return false
-    if (moduleFilter && r['Module'] !== moduleFilter)            return false
+    if ((r['In-KB or Gap'] || '') === 'Negative') return false
+    if (moduleFilter && r['Module'] !== moduleFilter) return false
     return true
   })
   if (limitArg) rows = rows.slice(0, limitArg)
-  console.log(`📋 ${rows.length} cases to rewrite (after filters)\n`)
+  console.log(`📋 ${rows.length} cases to rewrite\n`)
 
   if (!DRY_RUN) {
+    const up = await isOllamaUp()
     if (!up) {
-      console.error('❌ Ollama not running. Start it with: ollama serve')
-      console.error('   Or use --dry-run to test without LLM.')
+      console.error('❌ Ollama not running. Start with: ollama serve')
       process.exit(1)
     }
     console.log(`🧠 Ollama available — using ${OLLAMA_MODEL}\n`)
   }
 
-  const groups     = groupByL3(rows)
+  const groups = groupByL3(rows)
   console.log(`📦 ${groups.length} L3 groups\n`)
 
-  const outputRows = await generateVariants(groups)
+  const { outputRows, parseOk, parseFail } = await generateVariants(groups)
+
   writeCSV(outputRows)
-  console.log(`✅ Written ${outputRows.length} realistic variants → ${OUTPUT_CSV}`)
-  console.log('\nNext steps:')
-  console.log('  1. Load blu_test_cases_v7_realistic.csv in dashboard')
-  console.log('  2. Run bulk across your modules')
-  console.log('  3. Compare pass rates vs V7 — gap = realistic drop\n')
+
+  const rewriteRate = Math.round((parseOk / (parseOk + parseFail)) * 100) || 0
+  console.log(`✅ Written ${outputRows.length} variants → ${OUTPUT_CSV}`)
+  console.log(`📊 Rewrite rate: ${rewriteRate}% (${parseOk} batches rewritten, ${parseFail} used originals)`)
+  console.log('\nSource=realistic_v1 → rewritten | Source=realistic_v1_fallback → original used\n')
 }
 
 main().catch(err => { console.error('Fatal:', err); process.exit(1) })
